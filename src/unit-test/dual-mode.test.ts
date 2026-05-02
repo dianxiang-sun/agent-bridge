@@ -1,5 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { ClaudeAdapter } from "../claude-adapter";
+import type { AskCodexResult } from "../control-protocol";
 
 // Access internals for testing
 function createAdapter(envMode?: string): any {
@@ -35,6 +36,55 @@ function makeBridgeMessage(content: string, ts?: number) {
     source: "codex" as const,
     content,
     timestamp: ts ?? Date.now(),
+  };
+}
+
+function makeAskCodexResult(
+  requestId: string,
+  overrides: Partial<AskCodexResult> = {},
+): AskCodexResult {
+  const base: AskCodexResult = {
+    outcome: "turn_completed",
+    messages: [
+      { id: "codex-1", source: "codex", content: "[IMPORTANT] done", timestamp: Date.now() },
+    ],
+    completionSignal: "codex_app_server_turn_completed",
+    metadata: {
+      requestId,
+      chat_id: null,
+      turn_id: null,
+      taskId: null,
+      started_at: Date.now() - 20,
+      completed_at: Date.now(),
+      elapsed_ms: 20,
+      timed_out_at: null,
+      message_count: 1,
+      post_timeout_delivery: null,
+    },
+  };
+
+  return {
+    ...base,
+    ...overrides,
+    metadata: {
+      ...base.metadata,
+      ...overrides.metadata,
+    },
+  };
+}
+
+function parseAskCodexTextResult(result: any): AskCodexResult {
+  expect(result.content).toHaveLength(1);
+  expect(result.content[0].type).toBe("text");
+  return JSON.parse(result.content[0].text) as AskCodexResult;
+}
+
+function makeHandlerExtra(signal = new AbortController().signal) {
+  return {
+    signal,
+    requestId: 1,
+    sendNotification: async () => {},
+    sendRequest: async () => ({}),
   };
 }
 
@@ -267,5 +317,237 @@ describe("Dual-mode transport: reply pending hint", () => {
     const result = await adapter.handleReply({ text: "hello" });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("bridge not initialized");
+  });
+});
+
+describe("Dual-mode transport: ask_codex tool", () => {
+  test("lists ask_codex with the locked public schema", async () => {
+    const adapter = createAdapter("pull");
+    const listHandler = adapter.server._requestHandlers.get("tools/list");
+
+    const result = await listHandler(
+      { method: "tools/list", params: {} },
+      makeHandlerExtra(),
+    );
+    const tool = result.tools.find((entry: any) => entry.name === "ask_codex");
+
+    expect(tool).toBeDefined();
+    expect(tool.inputSchema.required).toEqual(["text"]);
+    expect(tool.inputSchema.properties.text.type).toBe("string");
+    expect(tool.inputSchema.properties.chat_id.type).toBe("string");
+    expect(tool.inputSchema.properties.timeout_ms.type).toBe("number");
+    expect(tool.inputSchema.properties.message).toBeUndefined();
+    expect(tool.inputSchema.properties.timeoutMs).toBeUndefined();
+    expect(tool.inputSchema.properties.taskHint).toBeUndefined();
+  });
+
+  test("CallTool handler dispatches ask_codex through JSON text content", async () => {
+    const adapter = createAdapter("pull");
+    adapter.setAskSender(
+      () => ({
+        requestId: "wait-handler",
+        result: Promise.resolve(makeAskCodexResult("wait-handler")),
+      }),
+      () => false,
+    );
+
+    const callHandler = adapter.server._requestHandlers.get("tools/call");
+    const result = await callHandler(
+      {
+        method: "tools/call",
+        params: { name: "ask_codex", arguments: { text: "handler path" } },
+      },
+      makeHandlerExtra(),
+    );
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(parsed.outcome).toBe("turn_completed");
+    expect(parsed.metadata.requestId).toBe("wait-handler");
+  });
+
+  test("handleAskCodex returns JSON text content and strips internal metadata", async () => {
+    const adapter = createAdapter("pull");
+    let observedMessage: any;
+    let observedTimeoutMs = 0;
+
+    adapter.setAskSender(
+      (message: any, timeoutMs: number) => {
+        observedMessage = message;
+        observedTimeoutMs = timeoutMs;
+        return {
+          requestId: "wait-json",
+          result: Promise.resolve(makeAskCodexResult("wait-json", {
+            metadata: {
+              taskId: "sdk-task-id",
+              requireReply: true,
+            } as any,
+          })),
+        };
+      },
+      () => false,
+    );
+
+    const result = await adapter.handleAskCodex({
+      text: "ask body",
+      chat_id: "codex_chat",
+      timeout_ms: 20000,
+    });
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(observedMessage).toMatchObject({
+      id: "codex_chat",
+      source: "claude",
+      content: "ask body",
+    });
+    expect(observedTimeoutMs).toBe(20000);
+    expect(parsed.metadata.taskId).toBeNull();
+    expect((parsed.metadata as any).requireReply).toBeUndefined();
+  });
+
+  test("timeout_ms clamp applies low bound, high bound, and default", async () => {
+    const adapter = createAdapter("pull");
+    const observedTimeouts: number[] = [];
+
+    adapter.setAskSender(
+      (_message: any, timeoutMs: number) => {
+        observedTimeouts.push(timeoutMs);
+        const requestId = `wait-timeout-${observedTimeouts.length}`;
+        return {
+          requestId,
+          result: Promise.resolve(makeAskCodexResult(requestId)),
+        };
+      },
+      () => false,
+    );
+
+    await adapter.handleAskCodex({ text: "low", timeout_ms: 5000 });
+    await adapter.handleAskCodex({ text: "high", timeout_ms: 9000000 });
+    await adapter.handleAskCodex({ text: "default" });
+
+    expect(observedTimeouts).toEqual([10000, 7200000, 600000]);
+  });
+
+  test("busy outcome is propagated unchanged", async () => {
+    const adapter = createAdapter("pull");
+    const busyResult = makeAskCodexResult("wait-busy", {
+      outcome: "busy",
+      messages: [],
+      completionSignal: "agentbridge_busy",
+      metadata: {
+        active_request_id: "wait-active",
+        retry_after_ms: 250,
+        message_count: 0,
+      },
+    });
+    adapter.setAskSender(
+      () => ({
+        requestId: "wait-busy",
+        result: Promise.resolve(busyResult),
+      }),
+      () => false,
+    );
+
+    const result = await adapter.handleAskCodex({ text: "are you busy?" });
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(parsed.outcome).toBe("busy");
+    expect(parsed.completionSignal).toBe("agentbridge_busy");
+    expect(parsed.metadata.active_request_id).toBe("wait-active");
+    expect(parsed.metadata.retry_after_ms).toBe(250);
+  });
+
+  test("handleAskCodex returns bridge_error when ask sender is missing", async () => {
+    const adapter = createAdapter("pull");
+
+    const result = await adapter.handleAskCodex({ text: "no bridge" });
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(parsed.outcome).toBe("bridge_error");
+    expect(parsed.completionSignal).toBe("agentbridge_error");
+    expect(parsed.metadata.taskId).toBeNull();
+    expect(parsed.metadata.error).toContain("bridge not initialized");
+  });
+
+  test("abort sends wait_cancel and never calls daemonClient.disconnect", async () => {
+    const adapter = createAdapter("pull");
+    const controller = new AbortController();
+    const cancelCalls: Array<{ requestId: string; reason?: string }> = [];
+    let disconnectCalls = 0;
+    let resolveWait!: (result: AskCodexResult) => void;
+    const daemonClient = {
+      sendAskCodex: (_message: any, _timeoutMs: number) => ({
+        requestId: "wait-abort",
+        result: new Promise<AskCodexResult>((resolve) => {
+          resolveWait = resolve;
+        }),
+      }),
+      sendCancelWait: (requestId: string, reason?: string) => {
+        cancelCalls.push({ requestId, reason });
+        resolveWait(makeAskCodexResult(requestId, {
+          outcome: "cancelled",
+          messages: [],
+          completionSignal: "agentbridge_cancelled",
+          metadata: { message_count: 0 },
+        }));
+        return true;
+      },
+      disconnect: () => {
+        disconnectCalls += 1;
+      },
+    };
+    adapter.setAskSender(
+      (message: any, timeoutMs: number) => daemonClient.sendAskCodex(message, timeoutMs),
+      (requestId: string, reason?: string) => daemonClient.sendCancelWait(requestId, reason),
+    );
+
+    const pending = adapter.handleAskCodex({ text: "cancel me" }, controller.signal);
+    controller.abort();
+    const result = await pending;
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(cancelCalls).toEqual([{ requestId: "wait-abort", reason: "abort_signal" }]);
+    expect(disconnectCalls).toBe(0);
+    expect(parsed.outcome).toBe("cancelled");
+  });
+
+  test("pre-aborted signal returns cancelled without creating a wait", async () => {
+    const adapter = createAdapter("pull");
+    const controller = new AbortController();
+    let sendAskCalls = 0;
+    adapter.setAskSender(
+      () => {
+        sendAskCalls += 1;
+        return {
+          requestId: "wait-should-not-exist",
+          result: Promise.resolve(makeAskCodexResult("wait-should-not-exist")),
+        };
+      },
+      () => false,
+    );
+    controller.abort();
+
+    const result = await adapter.handleAskCodex({ text: "already cancelled" }, controller.signal);
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(sendAskCalls).toBe(0);
+    expect(parsed.outcome).toBe("cancelled");
+    expect(parsed.completionSignal).toBe("agentbridge_cancelled");
+  });
+
+  test("ask sender exceptions map to bridge_error text result", async () => {
+    const adapter = createAdapter("pull");
+    adapter.setAskSender(
+      () => {
+        throw new Error("sender exploded");
+      },
+      () => false,
+    );
+
+    const result = await adapter.handleAskCodex({ text: "boom" });
+    const parsed = parseAskCodexTextResult(result);
+
+    expect(parsed.outcome).toBe("bridge_error");
+    expect(parsed.completionSignal).toBe("agentbridge_error");
+    expect(parsed.metadata.error).toContain("sender exploded");
   });
 });

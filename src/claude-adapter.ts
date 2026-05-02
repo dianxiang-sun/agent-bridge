@@ -23,9 +23,17 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync } from "node:fs";
 import { StateDirResolver } from "./state-dir";
 import type { BridgeMessage } from "./types";
+import type { AskCodexCompletionSignal, AskCodexOutcome, AskCodexResult } from "./control-protocol";
+import type { AskCodexWaitHandle } from "./daemon-client";
 
 export type ReplySender = (msg: BridgeMessage, requireReply?: boolean) => Promise<{ success: boolean; error?: string }>;
+export type AskSender = (msg: BridgeMessage, timeoutMs: number) => AskCodexWaitHandle;
+export type WaitCancelSender = (requestId: string, reason?: string) => boolean;
 export type DeliveryMode = "push" | "pull" | "auto";
+
+const ASK_CODEX_DEFAULT_TIMEOUT_MS = 600_000;
+const ASK_CODEX_MIN_TIMEOUT_MS = 10_000;
+const ASK_CODEX_MAX_TIMEOUT_MS = 7_200_000;
 
 export const CLAUDE_INSTRUCTIONS = [
   "Codex is an AI coding agent (OpenAI) running in a separate session on the same machine.",
@@ -68,6 +76,8 @@ export class ClaudeAdapter extends EventEmitter {
   private readonly notificationIdPrefix: string;
   private readonly instanceId: string;
   private replySender: ReplySender | null = null;
+  private askSender: AskSender | null = null;
+  private waitCancelSender: WaitCancelSender | null = null;
   private readonly logFile: string;
 
   // Dual-mode transport
@@ -116,6 +126,12 @@ export class ClaudeAdapter extends EventEmitter {
   /** Register the async sender that bridge provides for reply delivery. */
   setReplySender(sender: ReplySender) {
     this.replySender = sender;
+  }
+
+  /** Register the async sender and cancel hook that bridge provides for ask_codex delivery. */
+  setAskSender(sender: AskSender, cancelSender: WaitCancelSender) {
+    this.askSender = sender;
+    this.waitCancelSender = cancelSender;
   }
 
   /** Returns the resolved delivery mode. */
@@ -272,10 +288,33 @@ export class ClaudeAdapter extends EventEmitter {
             required: [],
           },
         },
+        {
+          name: "ask_codex",
+          description:
+            "Send a question to Codex and wait for the Codex turn to finish or time out.",
+          inputSchema: {
+            type: "object" as const,
+            properties: {
+              text: {
+                type: "string",
+                description: "The message to send to Codex.",
+              },
+              chat_id: {
+                type: "string",
+                description: "Optional conversation annotation to attach to the outbound message.",
+              },
+              timeout_ms: {
+                type: "number",
+                description: "Maximum wait time in milliseconds. Values are clamped to 10 seconds through 2 hours.",
+              },
+            },
+            required: ["text"],
+          },
+        },
       ],
     }));
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name, arguments: args } = request.params;
 
       if (name === "reply") {
@@ -284,6 +323,10 @@ export class ClaudeAdapter extends EventEmitter {
 
       if (name === "get_messages") {
         return this.drainMessages();
+      }
+
+      if (name === "ask_codex") {
+        return this.handleAskCodex(args as Record<string, unknown>, extra.signal);
       }
 
       return {
@@ -337,6 +380,138 @@ export class ClaudeAdapter extends EventEmitter {
 
     return {
       content: [{ type: "text" as const, text: responseText }],
+    };
+  }
+
+  private async handleAskCodex(args: Record<string, unknown>, signal?: AbortSignal) {
+    const text = args?.text as string | undefined;
+    if (!text) {
+      return {
+        content: [{ type: "text" as const, text: "Error: missing required parameter 'text'" }],
+        isError: true,
+      };
+    }
+
+    const startedAt = Date.now();
+    if (signal?.aborted) {
+      return this.askResultContent(this.makeLocalAskResult({
+        outcome: "cancelled",
+        completionSignal: "agentbridge_cancelled",
+        startedAt,
+        error: "ask_codex request was cancelled before dispatch.",
+      }));
+    }
+
+    if (!this.askSender || !this.waitCancelSender) {
+      this.log("No ask_codex sender registered");
+      return this.askResultContent(this.makeLocalAskResult({
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        startedAt,
+        error: "bridge not initialized, cannot ask Codex.",
+      }));
+    }
+
+    const timeoutMs = this.clampAskCodexTimeout(args?.timeout_ms);
+    const bridgeMsg: BridgeMessage = {
+      id: (args?.chat_id as string) ?? `ask_${Date.now()}`,
+      source: "claude",
+      content: text,
+      timestamp: startedAt,
+    };
+
+    let handle: AskCodexWaitHandle;
+    try {
+      handle = this.askSender(bridgeMsg, timeoutMs);
+    } catch (err: any) {
+      return this.askResultContent(this.makeLocalAskResult({
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        startedAt,
+        error: `Failed to send ask_codex request: ${err.message}`,
+      }));
+    }
+
+    const onAbort = () => {
+      this.waitCancelSender?.(handle.requestId, "abort_signal");
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    try {
+      const result = await handle.result;
+      return this.askResultContent(result);
+    } catch (err: any) {
+      return this.askResultContent(this.makeLocalAskResult({
+        requestId: handle.requestId,
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        startedAt,
+        error: `ask_codex failed: ${err.message}`,
+      }));
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
+  }
+
+  private clampAskCodexTimeout(value: unknown): number {
+    const numericValue = typeof value === "number" && Number.isFinite(value)
+      ? value
+      : ASK_CODEX_DEFAULT_TIMEOUT_MS;
+    return Math.min(
+      ASK_CODEX_MAX_TIMEOUT_MS,
+      Math.max(ASK_CODEX_MIN_TIMEOUT_MS, numericValue),
+    );
+  }
+
+  private askResultContent(result: AskCodexResult): { content: Array<{ type: "text"; text: string }> } {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(this.normalizeAskResult(result)),
+        },
+      ],
+    };
+  }
+
+  private normalizeAskResult(result: AskCodexResult): AskCodexResult {
+    const metadata = { ...(result.metadata as Record<string, unknown>) };
+    delete metadata.requireReply;
+
+    return {
+      ...result,
+      metadata: {
+        ...metadata,
+        taskId: null,
+      },
+    } as AskCodexResult;
+  }
+
+  private makeLocalAskResult(args: {
+    requestId?: string;
+    outcome: AskCodexOutcome;
+    completionSignal: AskCodexCompletionSignal;
+    startedAt: number;
+    error?: string;
+  }): AskCodexResult {
+    const completedAt = Date.now();
+    return {
+      outcome: args.outcome,
+      messages: [],
+      completionSignal: args.completionSignal,
+      metadata: {
+        ...(args.requestId ? { requestId: args.requestId } : {}),
+        chat_id: null,
+        turn_id: null,
+        taskId: null,
+        started_at: args.startedAt,
+        completed_at: completedAt,
+        elapsed_ms: completedAt - args.startedAt,
+        timed_out_at: null,
+        message_count: 0,
+        post_timeout_delivery: null,
+        ...(args.error ? { error: args.error } : {}),
+      },
     };
   }
 

@@ -8,6 +8,7 @@ import { StateDirResolver } from "./state-dir";
 import { ConfigService } from "./config-service";
 import { disabledReplyError, type BridgeDisabledReason } from "./bridge-disabled-state";
 import type { BridgeMessage } from "./types";
+import type { AskCodexResult } from "./control-protocol";
 
 const stateDir = new StateDirResolver();
 stateDir.ensure();
@@ -47,6 +48,40 @@ claude.setReplySender(async (msg: BridgeMessage, requireReply?: boolean) => {
 
   return daemonClient.sendReply(msg, requireReply);
 });
+
+claude.setAskSender(
+  (msg: BridgeMessage, timeoutMs: number) => {
+    if (msg.source !== "claude") {
+      const requestId = `wait_invalid_${Date.now()}`;
+      return {
+        requestId,
+        result: Promise.resolve(makeAskBridgeErrorResult(
+          requestId,
+          msg,
+          "Invalid message source",
+        )),
+      };
+    }
+
+    if (daemonDisabled) {
+      const requestId = `wait_disabled_${Date.now()}`;
+      return {
+        requestId,
+        result: Promise.resolve(makeAskBridgeErrorResult(
+          requestId,
+          msg,
+          disabledReplyError(daemonDisabledReason ?? "killed"),
+        )),
+      };
+    }
+
+    return daemonClient.sendAskCodex(msg, timeoutMs);
+  },
+  (requestId: string, reason?: string) => {
+    if (daemonDisabled) return false;
+    return daemonClient.sendCancelWait(requestId, reason);
+  },
+);
 
 daemonClient.on("codexMessage", (message) => {
   log(`Forwarding daemon → Claude (${message.content.length} chars)`);
@@ -276,6 +311,32 @@ function systemMessage(idPrefix: string, content: string): BridgeMessage {
     source: "codex",
     content,
     timestamp: Date.now(),
+  };
+}
+
+function makeAskBridgeErrorResult(
+  requestId: string,
+  message: BridgeMessage,
+  error: string,
+): AskCodexResult {
+  const completedAt = Date.now();
+  return {
+    outcome: "bridge_error",
+    messages: [],
+    completionSignal: "agentbridge_error",
+    metadata: {
+      requestId,
+      chat_id: null,
+      turn_id: null,
+      taskId: null,
+      started_at: message.timestamp,
+      completed_at: completedAt,
+      elapsed_ms: completedAt - message.timestamp,
+      timed_out_at: null,
+      message_count: 0,
+      post_timeout_delivery: null,
+      error,
+    },
   };
 }
 
