@@ -334,6 +334,7 @@ describe("Dual-mode transport: ask_codex tool", () => {
     expect(tool).toBeDefined();
     expect(tool.inputSchema.required).toEqual(["text"]);
     expect(tool.inputSchema.properties.text.type).toBe("string");
+    expect(tool.inputSchema.properties.text.minLength).toBe(1);
     expect(tool.inputSchema.properties.chat_id.type).toBe("string");
     expect(tool.inputSchema.properties.timeout_ms.type).toBe("number");
     expect(tool.inputSchema.properties.message).toBeUndefined();
@@ -466,6 +467,20 @@ describe("Dual-mode transport: ask_codex tool", () => {
     expect(parsed.completionSignal).toBe("agentbridge_error");
     expect(parsed.metadata.taskId).toBeNull();
     expect(parsed.metadata.error).toContain("bridge not initialized");
+  });
+
+  test("handleAskCodex distinguishes missing text from empty or non-string text", async () => {
+    const adapter = createAdapter("pull");
+
+    const missing = await adapter.handleAskCodex({});
+    expect(missing.isError).toBe(true);
+    expect(missing.content[0].text).toBe("Error: missing required parameter 'text'");
+
+    for (const invalidText of ["", 0, null]) {
+      const invalid = await adapter.handleAskCodex({ text: invalidText });
+      expect(invalid.isError).toBe(true);
+      expect(invalid.content[0].text).toBe("Error: 'text' must be a non-empty string");
+    }
   });
 
   test("abort sends wait_cancel and never calls daemonClient.disconnect", async () => {

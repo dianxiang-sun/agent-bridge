@@ -13938,6 +13938,7 @@ ${formatted}`
             properties: {
               text: {
                 type: "string",
+                minLength: 1,
                 description: "The message to send to Codex."
               },
               chat_id: {
@@ -14012,9 +14013,15 @@ ${formatted}`
   }
   async handleAskCodex(args, signal) {
     const text = args?.text;
-    if (!text) {
+    if (text === undefined) {
       return {
         content: [{ type: "text", text: "Error: missing required parameter 'text'" }],
+        isError: true
+      };
+    }
+    if (typeof text !== "string" || text.length === 0) {
+      return {
+        content: [{ type: "text", text: "Error: 'text' must be a non-empty string" }],
         isError: true
       };
     }

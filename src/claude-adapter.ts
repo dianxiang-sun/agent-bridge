@@ -297,6 +297,7 @@ export class ClaudeAdapter extends EventEmitter {
             properties: {
               text: {
                 type: "string",
+                minLength: 1,
                 description: "The message to send to Codex.",
               },
               chat_id: {
@@ -384,10 +385,16 @@ export class ClaudeAdapter extends EventEmitter {
   }
 
   private async handleAskCodex(args: Record<string, unknown>, signal?: AbortSignal) {
-    const text = args?.text as string | undefined;
-    if (!text) {
+    const text = args?.text;
+    if (text === undefined) {
       return {
         content: [{ type: "text" as const, text: "Error: missing required parameter 'text'" }],
+        isError: true,
+      };
+    }
+    if (typeof text !== "string" || text.length === 0) {
+      return {
+        content: [{ type: "text" as const, text: "Error: 'text' must be a non-empty string" }],
         isError: true,
       };
     }
