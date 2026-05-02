@@ -13714,6 +13714,9 @@ class StateDirResolver {
 }
 
 // src/claude-adapter.ts
+var ASK_CODEX_DEFAULT_TIMEOUT_MS = 600000;
+var ASK_CODEX_MIN_TIMEOUT_MS = 1e4;
+var ASK_CODEX_MAX_TIMEOUT_MS = 7200000;
 var CLAUDE_INSTRUCTIONS = [
   "Codex is an AI coding agent (OpenAI) running in a separate session on the same machine.",
   "",
@@ -13756,6 +13759,8 @@ class ClaudeAdapter extends EventEmitter {
   notificationIdPrefix;
   instanceId;
   replySender = null;
+  askSender = null;
+  waitCancelSender = null;
   logFile;
   configuredMode;
   resolvedMode = null;
@@ -13790,6 +13795,10 @@ class ClaudeAdapter extends EventEmitter {
   }
   setReplySender(sender) {
     this.replySender = sender;
+  }
+  setAskSender(sender, cancelSender) {
+    this.askSender = sender;
+    this.waitCancelSender = cancelSender;
   }
   getDeliveryMode() {
     return this.resolvedMode ?? "pull";
@@ -13920,16 +13929,41 @@ ${formatted}`
             properties: {},
             required: []
           }
+        },
+        {
+          name: "ask_codex",
+          description: "Send a question to Codex and wait for the Codex turn to finish or time out.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              text: {
+                type: "string",
+                description: "The message to send to Codex."
+              },
+              chat_id: {
+                type: "string",
+                description: "Optional conversation annotation to attach to the outbound message."
+              },
+              timeout_ms: {
+                type: "number",
+                description: "Maximum wait time in milliseconds. Values are clamped to 10 seconds through 2 hours."
+              }
+            },
+            required: ["text"]
+          }
         }
       ]
     }));
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const { name, arguments: args } = request.params;
       if (name === "reply") {
         return this.handleReply(args);
       }
       if (name === "get_messages") {
         return this.drainMessages();
+      }
+      if (name === "ask_codex") {
+        return this.handleAskCodex(args, extra.signal);
       }
       return {
         content: [{ type: "text", text: `Unknown tool: ${name}` }],
@@ -13976,6 +14010,115 @@ ${formatted}`
       content: [{ type: "text", text: responseText }]
     };
   }
+  async handleAskCodex(args, signal) {
+    const text = args?.text;
+    if (!text) {
+      return {
+        content: [{ type: "text", text: "Error: missing required parameter 'text'" }],
+        isError: true
+      };
+    }
+    const startedAt = Date.now();
+    if (signal?.aborted) {
+      return this.askResultContent(this.makeLocalAskResult({
+        outcome: "cancelled",
+        completionSignal: "agentbridge_cancelled",
+        startedAt,
+        error: "ask_codex request was cancelled before dispatch."
+      }));
+    }
+    if (!this.askSender || !this.waitCancelSender) {
+      this.log("No ask_codex sender registered");
+      return this.askResultContent(this.makeLocalAskResult({
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        startedAt,
+        error: "bridge not initialized, cannot ask Codex."
+      }));
+    }
+    const timeoutMs = this.clampAskCodexTimeout(args?.timeout_ms);
+    const bridgeMsg = {
+      id: args?.chat_id ?? `ask_${Date.now()}`,
+      source: "claude",
+      content: text,
+      timestamp: startedAt
+    };
+    let handle;
+    try {
+      handle = this.askSender(bridgeMsg, timeoutMs);
+    } catch (err) {
+      return this.askResultContent(this.makeLocalAskResult({
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        startedAt,
+        error: `Failed to send ask_codex request: ${err.message}`
+      }));
+    }
+    const onAbort = () => {
+      this.waitCancelSender?.(handle.requestId, "abort_signal");
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      const result = await handle.result;
+      return this.askResultContent(result);
+    } catch (err) {
+      return this.askResultContent(this.makeLocalAskResult({
+        requestId: handle.requestId,
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        startedAt,
+        error: `ask_codex failed: ${err.message}`
+      }));
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
+  }
+  clampAskCodexTimeout(value) {
+    const numericValue = typeof value === "number" && Number.isFinite(value) ? value : ASK_CODEX_DEFAULT_TIMEOUT_MS;
+    return Math.min(ASK_CODEX_MAX_TIMEOUT_MS, Math.max(ASK_CODEX_MIN_TIMEOUT_MS, numericValue));
+  }
+  askResultContent(result) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(this.normalizeAskResult(result))
+        }
+      ]
+    };
+  }
+  normalizeAskResult(result) {
+    const metadata = { ...result.metadata };
+    delete metadata.requireReply;
+    return {
+      ...result,
+      metadata: {
+        ...metadata,
+        taskId: null
+      }
+    };
+  }
+  makeLocalAskResult(args) {
+    const completedAt = Date.now();
+    return {
+      outcome: args.outcome,
+      messages: [],
+      completionSignal: args.completionSignal,
+      metadata: {
+        ...args.requestId ? { requestId: args.requestId } : {},
+        chat_id: null,
+        turn_id: null,
+        taskId: null,
+        started_at: args.startedAt,
+        completed_at: completedAt,
+        elapsed_ms: completedAt - args.startedAt,
+        timed_out_at: null,
+        message_count: 0,
+        post_timeout_delivery: null,
+        ...args.error ? { error: args.error } : {}
+      }
+    };
+  }
   log(msg) {
     const line = `[${new Date().toISOString()}] [ClaudeAdapter] ${msg}
 `;
@@ -13994,16 +14137,27 @@ var CLOSE_CODE_REPLACED = 4001;
 
 // src/daemon-client.ts
 var nextSocketId = 0;
+var DEFAULT_WAIT_RESULT_GRACE_MS = 30000;
+function parsePositiveIntegerMs(value) {
+  if (!value || !/^[1-9]\d*$/.test(value))
+    return;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
 
 class DaemonClient extends EventEmitter2 {
   url;
   ws = null;
   wsId = 0;
   nextRequestId = 1;
+  waitResultGraceMs;
   pendingReplies = new Map;
-  constructor(url) {
+  pendingWaits = new Map;
+  constructor(url, options = {}) {
     super();
     this.url = url;
+    const envWaitResultGraceMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_WAIT_RESULT_GRACE_MS);
+    this.waitResultGraceMs = Math.max(0, options.waitResultGraceMs ?? envWaitResultGraceMs ?? DEFAULT_WAIT_RESULT_GRACE_MS);
   }
   async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) {
@@ -14050,14 +14204,16 @@ class DaemonClient extends EventEmitter2 {
   async disconnect() {
     if (!this.ws)
       return;
+    const ws = this.ws;
     try {
       this.send({ type: "claude_disconnect" });
     } catch {}
-    try {
-      this.ws.close();
-    } catch {}
     this.ws = null;
     this.rejectPendingReplies("Daemon connection closed");
+    this.rejectPendingWaits("Daemon connection closed", "disconnect");
+    try {
+      ws.close();
+    } catch {}
   }
   async sendReply(message, requireReply) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -14077,6 +14233,105 @@ class DaemonClient extends EventEmitter2 {
         ...requireReply ? { requireReply: true } : {}
       });
     });
+  }
+  sendAskCodex(message, timeoutMs, taskHint) {
+    const requestId = `wait_${Date.now()}_${this.nextRequestId++}`;
+    const startedAt = Date.now();
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return {
+        requestId,
+        result: Promise.resolve(this.makeLocalWaitResult({
+          requestId,
+          message,
+          startedAt,
+          outcome: "bridge_error",
+          completionSignal: "agentbridge_error",
+          error: "AgentBridge daemon is not connected."
+        }))
+      };
+    }
+    const result = new Promise((resolve) => {
+      const waitResultTimeoutMs = Math.max(0, timeoutMs) + this.waitResultGraceMs;
+      const timer = setTimeout(() => {
+        const pending = this.pendingWaits.get(requestId);
+        if (!pending) {
+          this.finalizePendingWait(requestId, "timeout");
+          return;
+        }
+        this.finalizePendingWait(requestId, "timeout", this.makeLocalWaitResult({
+          requestId,
+          message: pending.message,
+          startedAt: pending.startedAt,
+          outcome: "bridge_error",
+          completionSignal: "agentbridge_error",
+          error: "Timed out waiting for AgentBridge daemon wait_result."
+        }));
+      }, waitResultTimeoutMs);
+      this.pendingWaits.set(requestId, {
+        requestId,
+        message,
+        startedAt,
+        timeoutMs,
+        timer,
+        resolve
+      });
+      try {
+        this.send({
+          type: "claude_to_codex_wait",
+          requestId,
+          message,
+          timeoutMs,
+          requireReply: true,
+          ...taskHint ? { taskHint } : {}
+        });
+      } catch (err) {
+        const pending = this.pendingWaits.get(requestId);
+        this.finalizePendingWait(requestId, "disconnect", this.makeLocalWaitResult({
+          requestId,
+          message: pending?.message ?? message,
+          startedAt: pending?.startedAt ?? startedAt,
+          outcome: "bridge_error",
+          completionSignal: "agentbridge_error",
+          error: `Failed to send ask_codex wait request: ${err.message}`
+        }));
+      }
+    });
+    return { requestId, result };
+  }
+  sendCancelWait(requestId, reason = "abort_signal") {
+    if (!requestId) {
+      this.log("sendCancelWait skipped: missing requestId");
+      return false;
+    }
+    const pending = this.pendingWaits.get(requestId);
+    if (!pending) {
+      this.finalizePendingWait(requestId, "abort_signal");
+      return false;
+    }
+    let sent = false;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.send({
+          type: "claude_to_codex_wait_cancel",
+          requestId,
+          reason
+        });
+        sent = true;
+      } catch (err) {
+        this.log(`sendCancelWait failed for ${requestId}: ${err.message}`);
+      }
+    } else {
+      this.log(`sendCancelWait could not send ${requestId}: daemon socket is not open`);
+    }
+    this.finalizePendingWait(requestId, "abort_signal", this.makeLocalWaitResult({
+      requestId,
+      message: pending.message,
+      startedAt: pending.startedAt,
+      outcome: "cancelled",
+      completionSignal: "agentbridge_cancelled",
+      error: `Wait cancelled: ${reason}`
+    }));
+    return sent;
   }
   attachSocketHandlers(ws, socketId) {
     ws.onmessage = (event) => {
@@ -14100,6 +14355,14 @@ class DaemonClient extends EventEmitter2 {
           pending.resolve({ success: message.success, error: message.error });
           return;
         }
+        case "codex_to_claude_wait_result":
+          this.finalizePendingWait(message.requestId, "wait_result_received", {
+            outcome: message.outcome,
+            messages: message.messages,
+            completionSignal: message.completionSignal,
+            metadata: message.metadata
+          });
+          return;
         case "status":
           this.emit("status", message.status);
           return;
@@ -14111,6 +14374,7 @@ class DaemonClient extends EventEmitter2 {
       if (isCurrent) {
         this.ws = null;
         this.rejectPendingReplies("AgentBridge daemon disconnected.");
+        this.rejectPendingWaits("AgentBridge daemon disconnected.", "ws_close");
         if (event.code === CLOSE_CODE_REPLACED) {
           this.emit("rejected");
         } else {
@@ -14126,6 +14390,58 @@ class DaemonClient extends EventEmitter2 {
       pending.resolve({ success: false, error: error2 });
       this.pendingReplies.delete(requestId);
     }
+  }
+  rejectPendingWaits(error2, source) {
+    for (const [requestId, pending] of Array.from(this.pendingWaits.entries())) {
+      this.finalizePendingWait(requestId, source, this.makeLocalWaitResult({
+        requestId,
+        message: pending.message,
+        startedAt: pending.startedAt,
+        outcome: "bridge_error",
+        completionSignal: "agentbridge_error",
+        error: error2
+      }));
+    }
+  }
+  finalizePendingWait(requestId, source, result) {
+    const pending = this.pendingWaits.get(requestId);
+    if (!pending) {
+      this.log(`finalizePendingWait(${requestId}, source=${source}) no-op`);
+      return false;
+    }
+    clearTimeout(pending.timer);
+    this.pendingWaits.delete(requestId);
+    this.log(`finalizePendingWait(${requestId}, source=${source})`);
+    pending.resolve(result ?? this.makeLocalWaitResult({
+      requestId,
+      message: pending.message,
+      startedAt: pending.startedAt,
+      outcome: "bridge_error",
+      completionSignal: "agentbridge_error",
+      error: `Wait finalized without result (${source}).`
+    }));
+    return true;
+  }
+  makeLocalWaitResult(args) {
+    const completedAt = Date.now();
+    return {
+      outcome: args.outcome,
+      messages: [],
+      completionSignal: args.completionSignal,
+      metadata: {
+        requestId: args.requestId,
+        chat_id: null,
+        turn_id: null,
+        taskId: null,
+        started_at: args.startedAt,
+        completed_at: completedAt,
+        elapsed_ms: completedAt - args.startedAt,
+        timed_out_at: null,
+        message_count: 0,
+        post_timeout_delivery: null,
+        ...args.error ? { error: args.error } : {}
+      }
+    };
   }
   send(message) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -14536,6 +14852,27 @@ claude.setReplySender(async (msg, requireReply) => {
   }
   return daemonClient.sendReply(msg, requireReply);
 });
+claude.setAskSender((msg, timeoutMs) => {
+  if (msg.source !== "claude") {
+    const requestId = `wait_invalid_${Date.now()}`;
+    return {
+      requestId,
+      result: Promise.resolve(makeAskBridgeErrorResult(requestId, msg, "Invalid message source"))
+    };
+  }
+  if (daemonDisabled) {
+    const requestId = `wait_disabled_${Date.now()}`;
+    return {
+      requestId,
+      result: Promise.resolve(makeAskBridgeErrorResult(requestId, msg, disabledReplyError(daemonDisabledReason ?? "killed")))
+    };
+  }
+  return daemonClient.sendAskCodex(msg, timeoutMs);
+}, (requestId, reason) => {
+  if (daemonDisabled)
+    return false;
+  return daemonClient.sendCancelWait(requestId, reason);
+});
 daemonClient.on("codexMessage", (message) => {
   log(`Forwarding daemon \u2192 Claude (${message.content.length} chars)`);
   claude.pushNotification(message);
@@ -14705,6 +15042,27 @@ function systemMessage(idPrefix, content) {
     source: "codex",
     content,
     timestamp: Date.now()
+  };
+}
+function makeAskBridgeErrorResult(requestId, message, error2) {
+  const completedAt = Date.now();
+  return {
+    outcome: "bridge_error",
+    messages: [],
+    completionSignal: "agentbridge_error",
+    metadata: {
+      requestId,
+      chat_id: null,
+      turn_id: null,
+      taskId: null,
+      started_at: message.timestamp,
+      completed_at: completedAt,
+      elapsed_ms: completedAt - message.timestamp,
+      timed_out_at: null,
+      message_count: 0,
+      post_timeout_delivery: null,
+      error: error2
+    }
   };
 }
 function shutdown(reason) {

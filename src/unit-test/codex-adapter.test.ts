@@ -5,6 +5,22 @@ function createAdapter() {
   return new CodexAdapter(4510, 4511) as any;
 }
 
+function createAdapterWithDrainTimeout(timeoutMs: string) {
+  const original = process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS;
+  process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS = timeoutMs;
+  const adapter = createAdapter();
+  if (original === undefined) {
+    delete process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS;
+  } else {
+    process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS = original;
+  }
+  return adapter;
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe("CodexAdapter app-server response handling", () => {
   test("forwards active mapped responses back to the current TUI id", () => {
     const adapter = createAdapter();
@@ -225,6 +241,125 @@ describe("CodexAdapter turn state machine", () => {
     adapter.handleServerNotification({ method: "turn/completed", params: { turn: { id: "t2" } } });
     expect(events).toEqual(["completed"]);
     expect(adapter.turnInProgress).toBe(false);
+  });
+
+  test("drain happy path emits turnCompleted immediately when agentMessage buffer already drained", () => {
+    const adapter = createAdapter();
+    const events: string[] = [];
+    const messages: string[] = [];
+    adapter.on("turnCompleted", () => events.push("completed"));
+    adapter.on("agentMessage", (msg: any) => messages.push(msg.content));
+
+    adapter.handleServerNotification({ method: "turn/started", params: { turn: { id: "drain-happy" } } });
+    adapter.handleServerNotification({
+      method: "item/started",
+      params: { item: { id: "msg-happy", type: "agentMessage" } },
+    });
+    adapter.handleServerNotification({
+      method: "item/agentMessage/delta",
+      params: { itemId: "msg-happy", delta: "[IMPORTANT] ready" },
+    });
+    adapter.handleServerNotification({
+      method: "item/completed",
+      params: { item: { id: "msg-happy", type: "agentMessage" } },
+    });
+    adapter.handleServerNotification({ method: "turn/completed", params: { turn: { id: "drain-happy" } } });
+
+    expect(messages).toEqual(["[IMPORTANT] ready"]);
+    expect(events).toEqual(["completed"]);
+    expect(adapter.agentMessageBuffers.size).toBe(0);
+  });
+
+  test("drain cap-hit warn log fires with exact spec wording", async () => {
+    const adapter = createAdapterWithDrainTimeout("5");
+    const events: string[] = [];
+    const logs: string[] = [];
+    adapter.log = (msg: string) => logs.push(msg);
+    adapter.on("turnCompleted", () => events.push("completed"));
+
+    adapter.handleServerNotification({ method: "turn/started", params: { turn: { id: "drain-cap" } } });
+    adapter.handleServerNotification({
+      method: "item/started",
+      params: { item: { id: "msg-stuck", type: "agentMessage" } },
+    });
+    adapter.handleServerNotification({
+      method: "item/agentMessage/delta",
+      params: { itemId: "msg-stuck", delta: "[IMPORTANT] still streaming" },
+    });
+    adapter.handleServerNotification({ method: "turn/completed", params: { turn: { id: "drain-cap" } } });
+
+    expect(events).toEqual([]);
+    await delay(25);
+
+    expect(events).toEqual(["completed"]);
+    expect(logs).toContain("agentMessageBuffers had 1 entries at turnCompleted; drain timeout exceeded — possible message loss");
+  });
+
+  test("last-msg-after-turnCompleted strict keeps drained message before waiter finalization", async () => {
+    const adapter = createAdapterWithDrainTimeout("50");
+    const waiter = { messages: [] as any[], finalized: false };
+    const postFinalizeMessages: any[] = [];
+    let waitResult: { messages: any[] } | null = null;
+
+    adapter.on("agentMessage", (msg: any) => {
+      if (!waiter.finalized) {
+        waiter.messages.push(msg);
+      } else {
+        postFinalizeMessages.push(msg);
+      }
+    });
+    adapter.on("turnCompleted", () => {
+      waiter.finalized = true;
+      waitResult = { messages: [...waiter.messages] };
+    });
+
+    adapter.handleServerNotification({ method: "turn/started", params: { turn: { id: "drain-strict" } } });
+    adapter.handleServerNotification({
+      method: "item/started",
+      params: { item: { id: "msg-strict", type: "agentMessage" } },
+    });
+    adapter.handleServerNotification({
+      method: "item/agentMessage/delta",
+      params: { itemId: "msg-strict", delta: "[IMPORTANT] final after turnCompleted" },
+    });
+    adapter.handleServerNotification({ method: "turn/completed", params: { turn: { id: "drain-strict" } } });
+
+    expect(waitResult).toBeNull();
+
+    adapter.handleServerNotification({
+      method: "item/completed",
+      params: { item: { id: "msg-strict", type: "agentMessage" } },
+    });
+    await delay(15);
+
+    expect(waitResult).not.toBeNull();
+    const finalizedResult = waitResult as unknown as { messages: Array<{ content: string }> };
+    expect(finalizedResult.messages.map((msg) => msg.content)).toEqual(["[IMPORTANT] final after turnCompleted"]);
+    expect(postFinalizeMessages).toEqual([]);
+  });
+
+  test("AGENTBRIDGE_DRAIN_TIMEOUT_MS overrides drain timeout for fast cap-hit", async () => {
+    const adapter = createAdapterWithDrainTimeout("50");
+    const events: string[] = [];
+    const logs: string[] = [];
+    adapter.log = (msg: string) => logs.push(msg);
+    adapter.on("turnCompleted", () => events.push("completed"));
+
+    expect(adapter.drainTimeoutMs).toBe(50);
+
+    adapter.handleServerNotification({ method: "turn/started", params: { turn: { id: "drain-env" } } });
+    adapter.handleServerNotification({
+      method: "item/started",
+      params: { item: { id: "msg-env", type: "agentMessage" } },
+    });
+    adapter.handleServerNotification({ method: "turn/completed", params: { turn: { id: "drain-env" } } });
+
+    await delay(20);
+    expect(events).toEqual([]);
+
+    await delay(60);
+    expect(events).toEqual(["completed"]);
+    expect(logs).toContain("agentMessageBuffers had 1 entries at turnCompleted; drain timeout exceeded — possible message loss");
   });
 
   test("injectMessage rejects during active turn", () => {

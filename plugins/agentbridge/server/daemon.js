@@ -103,6 +103,18 @@ function isAppServerResponseMessage(value) {
 }
 
 // src/codex-adapter.ts
+var DEFAULT_DRAIN_TIMEOUT_MS = 300;
+var DRAIN_TIMEOUT_WARNING_TEMPLATE = "agentMessageBuffers had N entries at turnCompleted; drain timeout exceeded \u2014 possible message loss";
+function parsePositiveIntegerMs(value) {
+  if (!value || !/^[1-9]\d*$/.test(value))
+    return;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+function formatDrainTimeoutWarning(entryCount) {
+  return DRAIN_TIMEOUT_WARNING_TEMPLATE.replace("N", String(entryCount));
+}
+
 class CodexAdapter extends EventEmitter {
   static RESPONSE_TRACKING_TTL_MS = 30000;
   proc = null;
@@ -114,6 +126,7 @@ class CodexAdapter extends EventEmitter {
   appPort;
   proxyPort;
   logFile;
+  drainTimeoutMs;
   tuiConnId = 0;
   connIdCounter = 0;
   secondaryConnections = new Map;
@@ -138,6 +151,7 @@ class CodexAdapter extends EventEmitter {
     this.appPort = appPort;
     this.proxyPort = proxyPort;
     this.logFile = logFile;
+    this.drainTimeoutMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS) ?? DEFAULT_DRAIN_TIMEOUT_MS;
   }
   get appServerUrl() {
     return `ws://127.0.0.1:${this.appPort}`;
@@ -797,11 +811,45 @@ class CodexAdapter extends EventEmitter {
         const wasInProgress = this.turnInProgress;
         this.markTurnCompleted(params?.turn?.id);
         if (wasInProgress && !this.turnInProgress) {
-          this.emit("turnCompleted");
+          this.emitTurnCompletedWhenAgentMessagesDrained();
         }
         break;
       }
     }
+  }
+  emitTurnCompletedWhenAgentMessagesDrained() {
+    const bufferIds = new Set(this.agentMessageBuffers.keys());
+    if (bufferIds.size === 0) {
+      this.emit("turnCompleted");
+      return;
+    }
+    this.emitTurnCompletedAfterDrain(bufferIds);
+  }
+  async emitTurnCompletedAfterDrain(bufferIds) {
+    const initialCount = bufferIds.size;
+    const timedOut = await this.waitForAgentMessageBufferDrain(bufferIds);
+    if (timedOut) {
+      this.log(formatDrainTimeoutWarning(initialCount));
+    }
+    this.emit("turnCompleted");
+  }
+  async waitForAgentMessageBufferDrain(bufferIds) {
+    const deadline = Date.now() + this.drainTimeoutMs;
+    while (this.countRemainingAgentMessageBuffers(bufferIds) > 0) {
+      if (Date.now() >= deadline)
+        return true;
+      const waitMs = Math.min(10, Math.max(0, deadline - Date.now()));
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    return false;
+  }
+  countRemainingAgentMessageBuffers(bufferIds) {
+    let remaining = 0;
+    for (const id of bufferIds) {
+      if (this.agentMessageBuffers.has(id))
+        remaining++;
+    }
+    return remaining;
   }
   extractContent(item) {
     if (item.content?.length) {
@@ -1651,6 +1699,7 @@ var attentionWindowTimer = null;
 var inAttentionWindow = false;
 var replyRequired = false;
 var replyReceivedDuringTurn = false;
+var activeWaiter = null;
 var shuttingDown = false;
 var idleShutdownTimer = null;
 var claudeDisconnectTimer = null;
@@ -1673,11 +1722,23 @@ var tuiConnectionState = new TuiConnectionState({
 var statusBuffer = new StatusBuffer((summary) => emitToClaude(summary));
 codex.on("turnStarted", () => {
   log("Codex turn started");
+  if (activeWaiter) {
+    log(`Suppressing system_turn_started during active waiter ${activeWaiter.requestId}`);
+    return;
+  }
   emitToClaude(systemMessage("system_turn_started", "\u23F3 Codex is working on the current task. Wait for completion before sending a reply."));
 });
 codex.on("agentMessage", (msg) => {
   if (msg.source !== "codex")
     return;
+  if (activeWaiter) {
+    log(`Codex \u2192 waiter ${activeWaiter.requestId} (${msg.content.length} chars)`);
+    activeWaiter.messages.push(msg);
+    if (activeWaiter.waiterOwnsReplyRequired) {
+      replyReceivedDuringTurn = true;
+    }
+    return;
+  }
   const result = classifyMessage(msg.content, FILTER_MODE);
   if (replyRequired) {
     log(`Codex \u2192 Claude [${result.marker}/force-forward-reply-required] (${msg.content.length} chars)`);
@@ -1713,6 +1774,10 @@ codex.on("agentMessage", (msg) => {
 });
 codex.on("turnCompleted", () => {
   log("Codex turn completed");
+  if (activeWaiter) {
+    finalizeWaiter(activeWaiter.requestId, "turn_completed");
+    return;
+  }
   statusBuffer.flush("turn completed");
   if (replyRequired && !replyReceivedDuringTurn) {
     log("\u26A0\uFE0F Reply was required but Codex did not send any agentMessage");
@@ -1749,6 +1814,9 @@ codex.on("error", (err) => {
 });
 codex.on("exit", (code) => {
   log(`Codex process exited (code ${code})`);
+  if (activeWaiter) {
+    finalizeWaiter(activeWaiter.requestId, "daemon_error", `Codex app-server exited (code ${code ?? "unknown"}).`);
+  }
   codexBootstrapped = false;
   statusBuffer.flush("codex exited");
   tuiConnectionState.handleCodexExit();
@@ -1785,7 +1853,7 @@ function startControlServer() {
       close: (ws, code, reason) => {
         log(`Frontend socket closed (#${ws.data.clientId}, code=${code}, reason=${reason || "none"}, wasAttached=${attachedClaude === ws})`);
         if (attachedClaude === ws) {
-          detachClaude(ws, "frontend socket closed");
+          detachClaude(ws, "frontend socket closed", "ws_close");
         }
       },
       message: (ws, raw) => {
@@ -1808,10 +1876,16 @@ function handleControlMessage(ws, raw) {
       attachClaude(ws);
       return;
     case "claude_disconnect":
-      detachClaude(ws, "frontend requested disconnect");
+      detachClaude(ws, "frontend requested disconnect", "claude_disconnect");
       return;
     case "status":
       sendStatus(ws);
+      return;
+    case "claude_to_codex_wait":
+      handleWaitRequest(ws, message);
+      return;
+    case "claude_to_codex_wait_cancel":
+      handleWaitCancel(message.requestId, message.reason);
       return;
     case "claude_to_codex": {
       if (message.message.source !== "claude") {
@@ -1865,6 +1939,168 @@ function handleControlMessage(ws, raw) {
     }
   }
 }
+function handleWaitRequest(ws, message) {
+  const startedAt = Date.now();
+  if (message.message.source !== "claude") {
+    sendWaitResult(ws, {
+      requestId: message.requestId,
+      outcome: "bridge_error",
+      messages: [],
+      completionSignal: "agentbridge_error",
+      metadata: baseWaitMetadata(message.requestId, startedAt, Date.now(), 0, {
+        error: "Invalid message source"
+      })
+    });
+    return;
+  }
+  if (activeWaiter) {
+    log(`Rejecting wait ${message.requestId}: active waiter ${activeWaiter.requestId} is already running`);
+    const completedAt = Date.now();
+    sendWaitResult(ws, {
+      requestId: message.requestId,
+      outcome: "busy",
+      messages: [],
+      completionSignal: "agentbridge_busy",
+      metadata: baseWaitMetadata(message.requestId, startedAt, completedAt, 0, {
+        active_request_id: activeWaiter.requestId,
+        retry_after_ms: 30000
+      })
+    });
+    return;
+  }
+  if (!tuiConnectionState.canReply()) {
+    sendWaitResult(ws, {
+      requestId: message.requestId,
+      outcome: "bridge_error",
+      messages: [],
+      completionSignal: "agentbridge_error",
+      metadata: baseWaitMetadata(message.requestId, startedAt, Date.now(), 0, {
+        error: "Codex is not ready. Wait for TUI to connect and create a thread."
+      })
+    });
+    return;
+  }
+  const timeoutMs = Math.max(0, Math.trunc(message.timeoutMs));
+  const waiterOwnsReplyRequired = message.requireReply === true && !replyRequired;
+  if (waiterOwnsReplyRequired) {
+    replyRequired = true;
+    replyReceivedDuringTurn = false;
+    log(`Reply required flag set for wait ${message.requestId}`);
+  }
+  const timeoutTimer = setTimeout(() => {
+    finalizeWaiter(message.requestId, "timeout");
+  }, timeoutMs);
+  activeWaiter = {
+    requestId: message.requestId,
+    ws,
+    message: message.message,
+    startedAt,
+    timeoutMs,
+    timeoutTimer,
+    messages: [],
+    waiterOwnsReplyRequired
+  };
+  const contentWithReminder = `${message.message.content}
+
+${BRIDGE_CONTRACT_REMINDER}${REPLY_REQUIRED_INSTRUCTION}`;
+  log(`Forwarding Claude \u2192 Codex wait ${message.requestId} (${message.message.content.length} chars, timeoutMs=${timeoutMs})`);
+  const injected = codex.injectMessage(contentWithReminder);
+  if (!injected) {
+    const reason = codex.turnInProgress ? "Codex is busy executing a turn. Wait for it to finish before sending another message." : "Injection failed: no active thread or WebSocket not connected.";
+    log(`Wait injection rejected: ${reason}`);
+    finalizeWaiter(message.requestId, "inject_failed", reason);
+    return;
+  }
+  clearAttentionWindow();
+}
+function handleWaitCancel(requestId, reason) {
+  if (!activeWaiter || activeWaiter.requestId !== requestId) {
+    log(`wait_cancel for unknown requestId=${requestId}; ignoring (likely race with prior finalize)`);
+    return;
+  }
+  finalizeWaiter(requestId, "client_cancel", `Wait cancelled: ${reason}`);
+}
+function finalizeWaiter(requestId, source, error) {
+  if (!activeWaiter || activeWaiter.requestId !== requestId) {
+    log(`finalizeWaiter(${requestId}, source=${source}) no-op`);
+    return false;
+  }
+  const waiter = activeWaiter;
+  clearTimeout(waiter.timeoutTimer);
+  activeWaiter = null;
+  if (waiter.waiterOwnsReplyRequired) {
+    replyRequired = false;
+    replyReceivedDuringTurn = false;
+  }
+  const completedAt = Date.now();
+  log(`finalizeWaiter(${requestId}, source=${source})`);
+  sendWaitResult(waiter.ws, buildWaitResult(waiter, source, completedAt, error));
+  return true;
+}
+function buildWaitResult(waiter, source, completedAt, error) {
+  let outcome;
+  let completionSignal;
+  let extraMetadata = {};
+  switch (source) {
+    case "turn_completed":
+      outcome = "turn_completed";
+      completionSignal = "codex_app_server_turn_completed";
+      break;
+    case "timeout":
+      outcome = "timeout";
+      completionSignal = "agentbridge_timeout";
+      extraMetadata = {
+        timed_out_at: completedAt,
+        post_timeout_delivery: "normal_agentbridge_routing"
+      };
+      break;
+    case "client_cancel":
+      outcome = "cancelled";
+      completionSignal = "agentbridge_cancelled";
+      extraMetadata = { error: error ?? "Wait cancelled." };
+      break;
+    case "inject_failed":
+    case "ws_close":
+    case "claude_disconnect":
+    case "daemon_error":
+      outcome = "bridge_error";
+      completionSignal = "agentbridge_error";
+      extraMetadata = { error: error ?? `Wait finalized due to ${source}.` };
+      break;
+  }
+  return {
+    requestId: waiter.requestId,
+    outcome,
+    messages: [...waiter.messages],
+    completionSignal,
+    metadata: baseWaitMetadata(waiter.requestId, waiter.startedAt, completedAt, waiter.messages.length, extraMetadata)
+  };
+}
+function baseWaitMetadata(requestId, startedAt, completedAt, messageCount, extra = {}) {
+  return {
+    requestId,
+    chat_id: null,
+    turn_id: null,
+    taskId: null,
+    started_at: startedAt,
+    completed_at: completedAt,
+    elapsed_ms: completedAt - startedAt,
+    timed_out_at: null,
+    message_count: messageCount,
+    post_timeout_delivery: null,
+    ...extra
+  };
+}
+function sendWaitResult(ws, result) {
+  sendProtocolMessage(ws, {
+    type: "codex_to_claude_wait_result",
+    requestId: result.requestId,
+    outcome: result.outcome,
+    messages: result.messages,
+    completionSignal: result.completionSignal,
+    metadata: result.metadata
+  });
+}
 function attachClaude(ws) {
   if (attachedClaude && attachedClaude !== ws && attachedClaude.readyState !== WebSocket.CLOSED) {
     log(`Rejecting Claude frontend #${ws.data.clientId} \u2014 another session (#${attachedClaude.data.clientId}) is already attached (readyState=${attachedClaude.readyState})`);
@@ -1894,9 +2130,12 @@ function attachClaude(ws) {
     notifyCodexClaudeOnline();
   }
 }
-function detachClaude(ws, reason) {
+function detachClaude(ws, reason, finalizeSource) {
   if (attachedClaude !== ws)
     return;
+  if (activeWaiter?.ws === ws) {
+    finalizeWaiter(activeWaiter.requestId, finalizeSource, `Claude frontend detached: ${reason}.`);
+  }
   attachedClaude = null;
   ws.data.attached = false;
   log(`Claude frontend detached (#${ws.data.clientId}, ${reason})`);
@@ -2117,18 +2356,6 @@ function shutdown(reason) {
   removeStatusFile();
   process.exit(0);
 }
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("exit", () => {
-  removePidFile();
-  removeStatusFile();
-});
-process.on("uncaughtException", (err) => {
-  log(`UNCAUGHT EXCEPTION: ${err.stack ?? err.message}`);
-});
-process.on("unhandledRejection", (reason) => {
-  log(`UNHANDLED REJECTION: ${reason?.stack ?? reason}`);
-});
 function log(msg) {
   const line = `[${new Date().toISOString()}] [AgentBridgeDaemon] ${msg}
 `;
@@ -2137,10 +2364,104 @@ function log(msg) {
     appendFileSync2(stateDir.logFile, line);
   } catch {}
 }
-if (daemonLifecycle.wasKilled()) {
-  log("Killed sentinel found \u2014 daemon was intentionally stopped. Exiting immediately.");
-  process.exit(0);
+var originalInjectMessage = codex.injectMessage.bind(codex);
+var __daemonTest = {
+  handleControlMessage,
+  emitAgentMessage(content, id = `test_msg_${Date.now()}`) {
+    codex.emit("agentMessage", {
+      id,
+      source: "codex",
+      content,
+      timestamp: Date.now()
+    });
+  },
+  emitTurnStarted() {
+    codex.emit("turnStarted");
+  },
+  emitTurnCompleted() {
+    codex.emit("turnCompleted");
+  },
+  emitCodexExit(code = 1) {
+    codex.emit("exit", code);
+  },
+  setCodexReady() {
+    tuiConnectionState.markBridgeReady();
+    tuiConnectionState.handleTuiConnected(1);
+  },
+  setInjectMessage(fn) {
+    codex.injectMessage = fn;
+  },
+  setTurnInProgress(value) {
+    codex.turnInProgress = value;
+  },
+  setReplyRequiredState(required, received) {
+    replyRequired = required;
+    replyReceivedDuringTurn = received;
+  },
+  getReplyRequiredState() {
+    return { replyRequired, replyReceivedDuringTurn };
+  },
+  getActiveWaiter() {
+    return activeWaiter;
+  },
+  getBufferedMessages() {
+    return [...bufferedMessages];
+  },
+  getStatusBufferSize() {
+    return statusBuffer.size;
+  },
+  detachClaudeForTest(ws, reason, source) {
+    detachClaude(ws, reason, source);
+  },
+  finalizeWaiterForTest(requestId, source, error) {
+    return finalizeWaiter(requestId, source, error);
+  },
+  reset() {
+    if (activeWaiter) {
+      clearTimeout(activeWaiter.timeoutTimer);
+      activeWaiter = null;
+    }
+    clearAttentionWindow();
+    clearPendingClaudeDisconnect("test reset");
+    cancelIdleShutdown();
+    statusBuffer.dispose();
+    bufferedMessages.splice(0, bufferedMessages.length);
+    attachedClaude = null;
+    replyRequired = false;
+    replyReceivedDuringTurn = false;
+    codexBootstrapped = false;
+    claudeOnlineNoticeSent = false;
+    claudeOfflineNoticeShown = false;
+    lastAttachStatusSentTs = 0;
+    tuiConnectionState.handleCodexExit();
+    codex.turnInProgress = false;
+    codex.injectMessage = originalInjectMessage;
+  }
+};
+function startDaemon() {
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("exit", () => {
+    removePidFile();
+    removeStatusFile();
+  });
+  process.on("uncaughtException", (err) => {
+    log(`UNCAUGHT EXCEPTION: ${err.stack ?? err.message}`);
+  });
+  process.on("unhandledRejection", (reason) => {
+    log(`UNHANDLED REJECTION: ${reason?.stack ?? reason}`);
+  });
+  if (daemonLifecycle.wasKilled()) {
+    log("Killed sentinel found \u2014 daemon was intentionally stopped. Exiting immediately.");
+    process.exit(0);
+  }
+  writePidFile();
+  startControlServer();
+  bootCodex();
 }
-writePidFile();
-startControlServer();
-bootCodex();
+if (import.meta.main) {
+  startDaemon();
+}
+export {
+  __daemonTest
+};

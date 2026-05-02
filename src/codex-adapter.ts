@@ -62,6 +62,20 @@ interface PendingRequest {
   threadId?: string;
 }
 
+const DEFAULT_DRAIN_TIMEOUT_MS = 300;
+const DRAIN_TIMEOUT_WARNING_TEMPLATE =
+  "agentMessageBuffers had N entries at turnCompleted; drain timeout exceeded — possible message loss";
+
+function parsePositiveIntegerMs(value: string | undefined): number | undefined {
+  if (!value || !/^[1-9]\d*$/.test(value)) return undefined;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function formatDrainTimeoutWarning(entryCount: number): string {
+  return DRAIN_TIMEOUT_WARNING_TEMPLATE.replace("N", String(entryCount));
+}
+
 export class CodexAdapter extends EventEmitter {
   private static readonly RESPONSE_TRACKING_TTL_MS = 30000;
 
@@ -76,6 +90,7 @@ export class CodexAdapter extends EventEmitter {
   private appPort: number;
   private proxyPort: number;
   private readonly logFile: string;
+  private readonly drainTimeoutMs: number;
   private tuiConnId = 0; // tracks which TUI connection is "current" (primary)
   private connIdCounter = 0; // monotonically increasing counter for unique conn IDs
   // Secondary (picker) connections: each gets its own dedicated app-server WS
@@ -112,6 +127,8 @@ export class CodexAdapter extends EventEmitter {
     this.appPort = appPort;
     this.proxyPort = proxyPort;
     this.logFile = logFile;
+    this.drainTimeoutMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS)
+      ?? DEFAULT_DRAIN_TIMEOUT_MS;
   }
 
   get appServerUrl() { return `ws://127.0.0.1:${this.appPort}`; }
@@ -904,11 +921,49 @@ export class CodexAdapter extends EventEmitter {
         this.markTurnCompleted(params?.turn?.id);
         // Only emit when all turns are done (symmetric with turnStarted)
         if (wasInProgress && !this.turnInProgress) {
-          this.emit("turnCompleted");
+          this.emitTurnCompletedWhenAgentMessagesDrained();
         }
         break;
       }
     }
+  }
+
+  private emitTurnCompletedWhenAgentMessagesDrained() {
+    const bufferIds = new Set(this.agentMessageBuffers.keys());
+    if (bufferIds.size === 0) {
+      this.emit("turnCompleted");
+      return;
+    }
+
+    void this.emitTurnCompletedAfterDrain(bufferIds);
+  }
+
+  private async emitTurnCompletedAfterDrain(bufferIds: Set<string>) {
+    const initialCount = bufferIds.size;
+    const timedOut = await this.waitForAgentMessageBufferDrain(bufferIds);
+    if (timedOut) {
+      this.log(formatDrainTimeoutWarning(initialCount));
+    }
+    this.emit("turnCompleted");
+  }
+
+  private async waitForAgentMessageBufferDrain(bufferIds: Set<string>): Promise<boolean> {
+    const deadline = Date.now() + this.drainTimeoutMs;
+    while (this.countRemainingAgentMessageBuffers(bufferIds) > 0) {
+      if (Date.now() >= deadline) return true;
+
+      const waitMs = Math.min(10, Math.max(0, deadline - Date.now()));
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    return false;
+  }
+
+  private countRemainingAgentMessageBuffers(bufferIds: Set<string>): number {
+    let remaining = 0;
+    for (const id of bufferIds) {
+      if (this.agentMessageBuffers.has(id)) remaining++;
+    }
+    return remaining;
   }
 
   private extractContent(item: AppServerItem): string {
