@@ -25,6 +25,11 @@ interface DaemonClientOptions {
   waitResultGraceMs?: number;
 }
 
+export interface AskCodexWaitHandle {
+  requestId: string;
+  result: Promise<AskCodexResult>;
+}
+
 interface PendingWait {
   requestId: string;
   message: BridgeMessage;
@@ -149,26 +154,29 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     });
   }
 
-  async sendAskCodex(
+  sendAskCodex(
     message: BridgeMessage,
     timeoutMs: number,
     taskHint?: Record<string, unknown>,
-  ): Promise<AskCodexResult> {
+  ): AskCodexWaitHandle {
     const requestId = `wait_${Date.now()}_${this.nextRequestId++}`;
     const startedAt = Date.now();
 
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      return this.makeLocalWaitResult({
+      return {
         requestId,
-        message,
-        startedAt,
-        outcome: "bridge_error",
-        completionSignal: "agentbridge_error",
-        error: "AgentBridge daemon is not connected.",
-      });
+        result: Promise.resolve(this.makeLocalWaitResult({
+          requestId,
+          message,
+          startedAt,
+          outcome: "bridge_error",
+          completionSignal: "agentbridge_error",
+          error: "AgentBridge daemon is not connected.",
+        })),
+      };
     }
 
-    return new Promise((resolve) => {
+    const result = new Promise<AskCodexResult>((resolve) => {
       const waitResultTimeoutMs = Math.max(0, timeoutMs) + this.waitResultGraceMs;
       const timer = setTimeout(() => {
         const pending = this.pendingWaits.get(requestId);
@@ -224,6 +232,8 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
         );
       }
     });
+
+    return { requestId, result };
   }
 
   sendCancelWait(requestId: string, reason = "abort_signal"): boolean {

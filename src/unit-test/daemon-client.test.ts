@@ -376,18 +376,19 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const resultPromise = client.sendAskCodex(
+    const handle = client.sendAskCodex(
       makeClaudeMessage("chat-slice-1", "question"),
       60000,
       { future: true },
     );
 
     await requestSeen;
-    const result = await resultPromise;
+    const result = await handle.result;
     await delay(10);
 
     expect(waitRequest.type).toBe("claude_to_codex_wait");
     expect(waitRequest.requestId).toMatch(/^wait_/);
+    expect(waitRequest.requestId).toBe(handle.requestId);
     expect(waitRequest.message.content).toBe("question");
     expect(waitRequest.timeoutMs).toBe(60000);
     expect(waitRequest.requireReply).toBe(true);
@@ -399,17 +400,46 @@ describe("DaemonClient", () => {
     expect((client as any).pendingWaits.size).toBe(0);
   });
 
+  test("sendAskCodex handle requestId matches the finalized wait_result requestId", async () => {
+    let waitRequest: any;
+    let resolveRequestSeen!: () => void;
+    const requestSeen = new Promise<void>((resolve) => {
+      resolveRequestSeen = resolve;
+    });
+
+    onServerMessage = (ws: any, raw: any) => {
+      const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+      if (msg.type !== "claude_to_codex_wait") return;
+
+      waitRequest = msg;
+      resolveRequestSeen();
+      ws.send(JSON.stringify(makeWaitResultFrame(msg.requestId)));
+    };
+
+    await client.connect();
+    const handle = client.sendAskCodex(makeClaudeMessage(), 60000);
+    await requestSeen;
+
+    const result = await handle.result;
+
+    expect(handle.requestId).toBe(waitRequest.requestId);
+    expect(result.metadata.requestId).toBe(handle.requestId);
+    expect((client as any).pendingWaits.size).toBe(0);
+  });
+
   test("sendAskCodex returns bridge_error when not connected", async () => {
-    const result = await client.sendAskCodex(makeClaudeMessage(), 60000);
+    const handle = client.sendAskCodex(makeClaudeMessage(), 60000);
+    const result = await handle.result;
 
     expect(result.outcome).toBe("bridge_error");
     expect(result.completionSignal).toBe("agentbridge_error");
     expect(result.metadata.error).toContain("not connected");
-    expect(result.metadata.requestId).toMatch(/^wait_/);
+    expect(result.metadata.requestId).toBe(handle.requestId);
+    expect(handle.requestId).toMatch(/^wait_/);
   });
 
   test("local bridge_error result leaves chat_id null", async () => {
-    const result = await client.sendAskCodex(makeClaudeMessage("message-id-not-chat-id"), 60000);
+    const result = await client.sendAskCodex(makeClaudeMessage("message-id-not-chat-id"), 60000).result;
 
     expect(result.outcome).toBe("bridge_error");
     expect(result.metadata.chat_id).toBeNull();
@@ -440,7 +470,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 5);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 5).result;
     await requestSeen;
 
     const result = await resultPromise;
@@ -465,7 +495,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
     for (const ws of serverSockets) {
@@ -490,7 +520,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
     await client.disconnect();
@@ -524,7 +554,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
     const sent = client.sendCancelWait(requestId);
@@ -559,7 +589,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
     const firstResult = makeAskCodexResult(requestId, {
@@ -598,7 +628,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
-    const waitPromise = client.sendAskCodex(makeClaudeMessage(), 60000);
+    const waitPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     let resolvedCount = 0;
     const observedPromise = waitPromise.then((result) => {
       resolvedCount += 1;
