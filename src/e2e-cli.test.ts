@@ -851,6 +851,7 @@ writeFileSync(pidFile, \`\${process.pid}\\n\`, "utf-8");
 
 function currentStatus() {
   return {
+    protocolVersion: 1,
     bridgeReady: false,
     tuiConnected: false,
     threadId: null,

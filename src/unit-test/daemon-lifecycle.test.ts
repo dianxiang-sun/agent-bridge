@@ -1,9 +1,10 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import { StateDirResolver } from "../state-dir";
-import { DaemonLifecycle, isProcessAlive } from "../daemon-lifecycle";
+import { DaemonLifecycle, isProcessAlive, resolveDaemonPath } from "../daemon-lifecycle";
 
 describe("DaemonLifecycle", () => {
   let tempDir: string;
@@ -27,6 +28,10 @@ describe("DaemonLifecycle", () => {
       controlPort: port,
       log: (msg) => logs.push(msg),
     });
+  }
+
+  function moduleUrl(path: string) {
+    return pathToFileURL(path).href;
   }
 
   test("healthUrl and controlWsUrl use correct port", () => {
@@ -71,6 +76,44 @@ describe("DaemonLifecycle", () => {
   test("readStatus returns null when no status file", () => {
     const lc = createLifecycle();
     expect(lc.readStatus()).toBeNull();
+  });
+
+  test("resolveDaemonPath honors explicit override", () => {
+    const base = join(tempDir, "dist", "cli.js");
+    const override = join(tempDir, "custom-daemon.ts");
+
+    expect(resolveDaemonPath(moduleUrl(base), override)).toBe(override);
+  });
+
+  test("resolveDaemonPath prefers sibling daemon.js", () => {
+    const distDir = join(tempDir, "dist");
+    const daemonPath = join(distDir, "daemon.js");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(daemonPath, "// daemon\n", "utf-8");
+
+    expect(resolveDaemonPath(moduleUrl(join(distDir, "cli.js")), undefined)).toBe(daemonPath);
+  });
+
+  test("resolveDaemonPath falls back from dist cli to plugin daemon bundle", () => {
+    const distDir = join(tempDir, "dist");
+    const pluginDir = join(tempDir, "plugins", "agentbridge", "server");
+    const daemonPath = join(pluginDir, "daemon.js");
+    mkdirSync(distDir, { recursive: true });
+    mkdirSync(pluginDir, { recursive: true });
+    writeFileSync(daemonPath, "// plugin daemon\n", "utf-8");
+
+    expect(resolveDaemonPath(moduleUrl(join(distDir, "cli.js")), undefined)).toBe(daemonPath);
+  });
+
+  test("resolveDaemonPath throws tried paths and env hint when no candidate exists", () => {
+    const distDir = join(tempDir, "dist");
+    mkdirSync(distDir, { recursive: true });
+    const base = moduleUrl(join(distDir, "cli.js"));
+
+    expect(() => resolveDaemonPath(base, undefined)).toThrow("Could not locate AgentBridge daemon entry");
+    expect(() => resolveDaemonPath(base, undefined)).toThrow("AGENTBRIDGE_DAEMON_ENTRY");
+    expect(() => resolveDaemonPath(base, undefined)).toThrow(join(distDir, "daemon.js"));
+    expect(() => resolveDaemonPath(base, undefined)).toThrow(join(tempDir, "plugins", "agentbridge", "server", "daemon.js"));
   });
 
   test("isHealthy returns false for non-existent port", async () => {

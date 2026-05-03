@@ -14158,6 +14158,7 @@ class DaemonClient extends EventEmitter2 {
   wsId = 0;
   nextRequestId = 1;
   waitResultGraceMs;
+  daemonProtocolVersion = null;
   pendingReplies = new Map;
   pendingWaits = new Map;
   constructor(url, options = {}) {
@@ -14180,6 +14181,7 @@ class DaemonClient extends EventEmitter2 {
       this.ws = null;
     }
     const socketId = ++nextSocketId;
+    this.daemonProtocolVersion = null;
     await new Promise((resolve, reject) => {
       const ws = new WebSocket(this.url);
       let settled = false;
@@ -14216,6 +14218,7 @@ class DaemonClient extends EventEmitter2 {
       this.send({ type: "claude_disconnect" });
     } catch {}
     this.ws = null;
+    this.daemonProtocolVersion = null;
     this.rejectPendingReplies("Daemon connection closed");
     this.rejectPendingWaits("Daemon connection closed", "disconnect");
     try {
@@ -14254,6 +14257,19 @@ class DaemonClient extends EventEmitter2 {
           outcome: "bridge_error",
           completionSignal: "agentbridge_error",
           error: "AgentBridge daemon is not connected."
+        }))
+      };
+    }
+    if (this.daemonProtocolVersion === null || this.daemonProtocolVersion < 1) {
+      return {
+        requestId,
+        result: Promise.resolve(this.makeLocalWaitResult({
+          requestId,
+          message,
+          startedAt,
+          outcome: "bridge_error",
+          completionSignal: "agentbridge_error",
+          error: this.protocolVersionError()
         }))
       };
     }
@@ -14343,12 +14359,17 @@ class DaemonClient extends EventEmitter2 {
   attachSocketHandlers(ws, socketId) {
     ws.onmessage = (event) => {
       const raw = typeof event.data === "string" ? event.data : event.data.toString();
-      let message;
+      let parsed;
       try {
-        message = JSON.parse(raw);
+        parsed = JSON.parse(raw);
       } catch {
         return;
       }
+      if (!isControlMessageObject(parsed)) {
+        this.log(`Rejecting malformed daemon message (${describeMalformedPayload(parsed)})`);
+        return;
+      }
+      const message = parsed;
       switch (message.type) {
         case "codex_to_claude":
           this.emit("codexMessage", message.message);
@@ -14362,6 +14383,30 @@ class DaemonClient extends EventEmitter2 {
           pending.resolve({ success: message.success, error: message.error });
           return;
         }
+        case "protocol_error": {
+          const error2 = `Daemon protocol error: ${message.error}`;
+          const pendingReply = this.pendingReplies.get(message.requestId);
+          if (pendingReply) {
+            clearTimeout(pendingReply.timer);
+            this.pendingReplies.delete(message.requestId);
+            pendingReply.resolve({ success: false, error: error2 });
+            return;
+          }
+          const pendingWait = this.pendingWaits.get(message.requestId);
+          if (pendingWait) {
+            this.finalizePendingWait(message.requestId, "protocol_error", this.makeLocalWaitResult({
+              requestId: message.requestId,
+              message: pendingWait.message,
+              startedAt: pendingWait.startedAt,
+              outcome: "bridge_error",
+              completionSignal: "agentbridge_error",
+              error: error2
+            }));
+            return;
+          }
+          this.log(`received protocol_error for unknown requestId ${message.requestId}: ${message.error}`);
+          return;
+        }
         case "codex_to_claude_wait_result":
           this.finalizePendingWait(message.requestId, "wait_result_received", {
             outcome: message.outcome,
@@ -14371,7 +14416,11 @@ class DaemonClient extends EventEmitter2 {
           });
           return;
         case "status":
-          this.emit("status", message.status);
+          this.daemonProtocolVersion = typeof message.status.protocolVersion === "number" ? message.status.protocolVersion : 0;
+          this.emit("status", {
+            ...message.status,
+            protocolVersion: this.daemonProtocolVersion
+          });
           return;
       }
     };
@@ -14380,6 +14429,7 @@ class DaemonClient extends EventEmitter2 {
       this.log(`ws#${socketId} onclose (code=${event.code}, reason=${event.reason || "none"}, isCurrent=${isCurrent}, currentWsId=${this.wsId})`);
       if (isCurrent) {
         this.ws = null;
+        this.daemonProtocolVersion = null;
         this.rejectPendingReplies("AgentBridge daemon disconnected.");
         this.rejectPendingWaits("AgentBridge daemon disconnected.", "ws_close");
         if (event.code === CLOSE_CODE_REPLACED) {
@@ -14450,6 +14500,12 @@ class DaemonClient extends EventEmitter2 {
       }
     };
   }
+  protocolVersionError() {
+    if (this.daemonProtocolVersion === null) {
+      return "AgentBridge daemon protocol version not yet known (status frame not received). This usually resolves in <1s \u2014 retry. If persistent, check daemon health at /healthz.";
+    }
+    return `AgentBridge daemon is v${this.daemonProtocolVersion} (no \`claude_to_codex_wait\` support). ask_codex requires daemon protocol v1+. Run \`cd /path/to/agent-bridge && npm install -g .\` (or \`npm link\` from your dev source), then \`agentbridge kill\` and restart Codex with \`agentbridge codex\`.`;
+  }
   send(message) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("AgentBridge daemon socket is not open.");
@@ -14461,13 +14517,39 @@ class DaemonClient extends EventEmitter2 {
 `);
   }
 }
+function isControlMessageObject(value) {
+  return typeof value === "object" && value !== null && typeof value.type === "string";
+}
+function describeMalformedPayload(value) {
+  let payload = "";
+  try {
+    payload = JSON.stringify(value);
+  } catch {
+    payload = "<unserializable>";
+  }
+  return `type=${typeof value}, payload=${String(payload).slice(0, 200)}`;
+}
 
 // src/daemon-lifecycle.ts
 import { spawn, execFileSync } from "child_process";
 import { existsSync as existsSync2, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, constants } from "fs";
 import { fileURLToPath } from "url";
-var DAEMON_ENTRY = process.env.AGENTBRIDGE_DAEMON_ENTRY ?? "./daemon.ts";
-var DAEMON_PATH = fileURLToPath(new URL(DAEMON_ENTRY, import.meta.url));
+function resolveDaemonPath(baseUrl = import.meta.url, override = process.env.AGENTBRIDGE_DAEMON_ENTRY) {
+  const base = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl;
+  if (override) {
+    return fileURLToPath(new URL(override, base));
+  }
+  const candidates = ["./daemon.js", "./daemon.ts", "../plugins/agentbridge/server/daemon.js"];
+  const tried = [];
+  for (const candidate of candidates) {
+    const resolved = fileURLToPath(new URL(candidate, base));
+    tried.push(resolved);
+    if (existsSync2(resolved))
+      return resolved;
+  }
+  throw new Error(`Could not locate AgentBridge daemon entry. Tried: ${tried.join(", ")}. ` + "Set AGENTBRIDGE_DAEMON_ENTRY env to override.");
+}
+var DAEMON_PATH = resolveDaemonPath();
 
 class DaemonLifecycle {
   stateDir;

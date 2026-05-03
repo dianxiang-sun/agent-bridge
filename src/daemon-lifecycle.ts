@@ -3,10 +3,34 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync, openSync, closeSyn
 import { fileURLToPath } from "node:url";
 import { StateDirResolver } from "./state-dir";
 
-// When bundled into a Claude Code plugin, the frontend runs from the plugin
-// cache directory and must launch the sibling daemon bundle from there.
-const DAEMON_ENTRY = process.env.AGENTBRIDGE_DAEMON_ENTRY ?? "./daemon.ts";
-const DAEMON_PATH = fileURLToPath(new URL(DAEMON_ENTRY, import.meta.url));
+// Resolve daemon entry across deployment contexts:
+// - Plugin bundle: bridge-server.js sibling -> ./daemon.js
+// - Dev source (bun run src/cli.ts): src/cli.ts sibling -> ./daemon.ts
+// - dist/cli.js after bundling: ../plugins/agentbridge/server/daemon.js
+export function resolveDaemonPath(
+  baseUrl: URL | string = import.meta.url,
+  override: string | undefined = process.env.AGENTBRIDGE_DAEMON_ENTRY,
+): string {
+  const base = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl;
+  if (override) {
+    return fileURLToPath(new URL(override, base));
+  }
+
+  const candidates = ["./daemon.js", "./daemon.ts", "../plugins/agentbridge/server/daemon.js"];
+  const tried: string[] = [];
+  for (const candidate of candidates) {
+    const resolved = fileURLToPath(new URL(candidate, base));
+    tried.push(resolved);
+    if (existsSync(resolved)) return resolved;
+  }
+
+  throw new Error(
+    `Could not locate AgentBridge daemon entry. Tried: ${tried.join(", ")}. ` +
+      "Set AGENTBRIDGE_DAEMON_ENTRY env to override.",
+  );
+}
+
+const DAEMON_PATH = resolveDaemonPath();
 
 export interface DaemonLifecycleOptions {
   stateDir: StateDirResolver;

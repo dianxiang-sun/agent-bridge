@@ -1318,8 +1318,22 @@ class TuiConnectionState {
 import { spawn as spawn2, execFileSync } from "child_process";
 import { existsSync as existsSync2, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, constants } from "fs";
 import { fileURLToPath } from "url";
-var DAEMON_ENTRY = process.env.AGENTBRIDGE_DAEMON_ENTRY ?? "./daemon.ts";
-var DAEMON_PATH = fileURLToPath(new URL(DAEMON_ENTRY, import.meta.url));
+function resolveDaemonPath(baseUrl = import.meta.url, override = process.env.AGENTBRIDGE_DAEMON_ENTRY) {
+  const base = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl;
+  if (override) {
+    return fileURLToPath(new URL(override, base));
+  }
+  const candidates = ["./daemon.js", "./daemon.ts", "../plugins/agentbridge/server/daemon.js"];
+  const tried = [];
+  for (const candidate of candidates) {
+    const resolved = fileURLToPath(new URL(candidate, base));
+    tried.push(resolved);
+    if (existsSync2(resolved))
+      return resolved;
+  }
+  throw new Error(`Could not locate AgentBridge daemon entry. Tried: ${tried.join(", ")}. ` + "Set AGENTBRIDGE_DAEMON_ENTRY env to override.");
+}
+var DAEMON_PATH = resolveDaemonPath();
 
 class DaemonLifecycle {
   stateDir;
@@ -1687,6 +1701,7 @@ var MAX_BUFFERED_MESSAGES = parseInt(process.env.AGENTBRIDGE_MAX_BUFFERED_MESSAG
 var FILTER_MODE = process.env.AGENTBRIDGE_FILTER_MODE === "full" ? "full" : "filtered";
 var IDLE_SHUTDOWN_MS = parseInt(process.env.AGENTBRIDGE_IDLE_SHUTDOWN_MS ?? String(config.idleShutdownSeconds * 1000), 10);
 var ATTENTION_WINDOW_MS = parseInt(process.env.AGENTBRIDGE_ATTENTION_WINDOW_MS ?? String(config.turnCoordination.attentionWindowSeconds * 1000), 10);
+var PROTOCOL_VERSION = 1;
 var daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
 var codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile);
 var attachCmd = `codex --enable tui_app_server --remote ${codex.proxyUrl}`;
@@ -1863,14 +1878,19 @@ function startControlServer() {
   });
 }
 function handleControlMessage(ws, raw) {
-  let message;
+  let parsed;
   try {
     const text = typeof raw === "string" ? raw : raw.toString();
-    message = JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch (e) {
     log(`Failed to parse control message: ${e.message}`);
     return;
   }
+  if (!isControlMessageObject(parsed)) {
+    log(`Rejecting malformed control message (${describeMalformedPayload(parsed)})`);
+    return;
+  }
+  const message = parsed;
   switch (message.type) {
     case "claude_connect":
       attachClaude(ws);
@@ -1937,7 +1957,33 @@ function handleControlMessage(ws, raw) {
       });
       return;
     }
+    default: {
+      const unknownMessage = message;
+      const type = unknownMessage.type;
+      const requestId = unknownMessage.requestId;
+      log(`Received unknown control message type: ${type ?? "<missing>"} (requestId=${requestId ?? "n/a"})`);
+      if (typeof requestId === "string") {
+        sendProtocolMessage(ws, {
+          type: "protocol_error",
+          requestId,
+          error: `Unsupported message type: ${type ?? "<missing>"}`
+        });
+      }
+      return;
+    }
   }
+}
+function isControlMessageObject(value) {
+  return typeof value === "object" && value !== null && typeof value.type === "string";
+}
+function describeMalformedPayload(value) {
+  let payload = "";
+  try {
+    payload = JSON.stringify(value);
+  } catch {
+    payload = "<unserializable>";
+  }
+  return `type=${typeof value}, payload=${String(payload).slice(0, 200)}`;
 }
 function handleWaitRequest(ws, message) {
   const startedAt = Date.now();
@@ -2276,6 +2322,7 @@ function sendProtocolMessage(ws, message) {
 function currentStatus() {
   const snapshot = tuiConnectionState.snapshot();
   return {
+    protocolVersion: PROTOCOL_VERSION,
     bridgeReady: tuiConnectionState.canReply(),
     tuiConnected: snapshot.tuiConnected,
     threadId: codex.activeThreadId,
