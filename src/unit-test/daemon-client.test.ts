@@ -55,6 +55,38 @@ function sendToClient(data: Record<string, unknown>) {
   }
 }
 
+function sendRawToClient(data: string) {
+  for (const ws of serverSockets) {
+    ws.send(data);
+  }
+}
+
+type TestProtocolVersion = number | "missing";
+
+function makeStatusFrame(protocolVersion: TestProtocolVersion = 1) {
+  return {
+    type: "status",
+    status: {
+      ...(protocolVersion === "missing" ? {} : { protocolVersion }),
+      bridgeReady: true,
+      tuiConnected: false,
+      threadId: null,
+      queuedMessageCount: 0,
+      proxyUrl: "http://localhost:4501",
+      appServerUrl: "http://localhost:4502",
+      pid: 123,
+    },
+  };
+}
+
+async function sendDaemonStatus(protocolVersion: TestProtocolVersion = 1) {
+  const statusPromise = new Promise<any>((resolve) => {
+    client.once("status", (s) => resolve(s));
+  });
+  sendToClient(makeStatusFrame(protocolVersion));
+  return statusPromise;
+}
+
 function makeClaudeMessage(id = "chat-test", content = "hello codex") {
   return {
     id,
@@ -235,21 +267,152 @@ describe("DaemonClient", () => {
       client.on("status", (s) => resolve(s));
     });
 
-    sendToClient({
-      type: "status",
-      status: {
-        bridgeReady: true,
-        tuiConnected: false,
-        threadId: null,
-        queuedMessageCount: 0,
-        proxyUrl: "http://localhost:4501",
-        appServerUrl: "http://localhost:4502",
-        pid: 123,
-      },
-    });
+    sendToClient(makeStatusFrame(1));
 
     const status = await statusPromise;
     expect(status.bridgeReady).toBe(true);
+    expect(status.protocolVersion).toBe(1);
+  });
+
+  test("ask_codex fails fast when daemon protocolVersion is not yet known", async () => {
+    await client.connect();
+
+    const startedAt = Date.now();
+    const result = await client.sendAskCodex(makeClaudeMessage(), 60000).result;
+
+    expect(result.outcome).toBe("bridge_error");
+    expect(result.completionSignal).toBe("agentbridge_error");
+    expect(result.metadata.elapsed_ms).toBeLessThan(100);
+    expect(Date.now() - startedAt).toBeLessThan(100);
+    expect(result.metadata.error).toContain("protocol version not yet known");
+    expect((client as any).pendingWaits.size).toBe(0);
+  });
+
+  test("normalizes missing protocolVersion status to v0 and ask_codex fails fast", async () => {
+    await client.connect();
+    const status = await sendDaemonStatus("missing");
+
+    let sawWaitRequest = false;
+    onServerMessage = (_ws: any, raw: any) => {
+      const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+      if (msg.type === "claude_to_codex_wait") sawWaitRequest = true;
+    };
+
+    const startedAt = Date.now();
+    const result = await client.sendAskCodex(makeClaudeMessage(), 60000).result;
+
+    expect(status.protocolVersion).toBe(0);
+    expect(result.outcome).toBe("bridge_error");
+    expect(result.completionSignal).toBe("agentbridge_error");
+    expect(result.metadata.elapsed_ms).toBeLessThan(100);
+    expect(Date.now() - startedAt).toBeLessThan(100);
+    expect(result.metadata.error).toContain("daemon is v0");
+    expect(sawWaitRequest).toBe(false);
+    expect((client as any).pendingWaits.size).toBe(0);
+  });
+
+  test("protocolVersion 0 ask_codex fails fast", async () => {
+    await client.connect();
+    await sendDaemonStatus(0);
+
+    const startedAt = Date.now();
+    const result = await client.sendAskCodex(makeClaudeMessage(), 60000).result;
+
+    expect(result.outcome).toBe("bridge_error");
+    expect(result.completionSignal).toBe("agentbridge_error");
+    expect(result.metadata.elapsed_ms).toBeLessThan(100);
+    expect(Date.now() - startedAt).toBeLessThan(100);
+    expect(result.metadata.error).toContain("daemon is v0");
+    expect((client as any).pendingWaits.size).toBe(0);
+  });
+
+  test("protocolVersion 1 allows ask_codex wait request", async () => {
+    let waitRequest: any;
+    const requestSeen = new Promise<void>((resolve) => {
+      onServerMessage = (ws: any, raw: any) => {
+        const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+        if (msg.type !== "claude_to_codex_wait") return;
+        waitRequest = msg;
+        ws.send(JSON.stringify(makeWaitResultFrame(msg.requestId)));
+        resolve();
+      };
+    });
+
+    await client.connect();
+    await sendDaemonStatus(1);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
+
+    await requestSeen;
+    const result = await resultPromise;
+
+    expect(waitRequest.type).toBe("claude_to_codex_wait");
+    expect(result.outcome).toBe("turn_completed");
+  });
+
+  test("protocolVersion 2 allows ask_codex wait request", async () => {
+    let waitRequest: any;
+    const requestSeen = new Promise<void>((resolve) => {
+      onServerMessage = (ws: any, raw: any) => {
+        const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+        if (msg.type !== "claude_to_codex_wait") return;
+        waitRequest = msg;
+        ws.send(JSON.stringify(makeWaitResultFrame(msg.requestId)));
+        resolve();
+      };
+    });
+
+    await client.connect();
+    await sendDaemonStatus(2);
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
+
+    await requestSeen;
+    const result = await resultPromise;
+
+    expect(waitRequest.type).toBe("claude_to_codex_wait");
+    expect(result.outcome).toBe("turn_completed");
+  });
+
+  test("daemon protocol version resets across reconnects", async () => {
+    await client.connect();
+    await sendDaemonStatus(1);
+    expect((client as any).daemonProtocolVersion).toBe(1);
+
+    const disconnected = new Promise<void>((resolve) => {
+      client.once("disconnect", () => resolve());
+    });
+    for (const ws of serverSockets) {
+      ws.close();
+    }
+    await disconnected;
+    expect((client as any).daemonProtocolVersion).toBeNull();
+
+    await client.connect();
+    await sendDaemonStatus("missing");
+
+    const startedAt = Date.now();
+    const result = await client.sendAskCodex(makeClaudeMessage(), 60000).result;
+
+    expect((client as any).daemonProtocolVersion).toBe(0);
+    expect(result.outcome).toBe("bridge_error");
+    expect(result.metadata.elapsed_ms).toBeLessThan(100);
+    expect(Date.now() - startedAt).toBeLessThan(100);
+    expect(result.metadata.error).toContain("daemon is v0");
+  });
+
+  test("ignores malformed daemon messages before switching on type", async () => {
+    await client.connect();
+
+    const statusPromise = new Promise<any>((resolve) => {
+      client.once("status", (s) => resolve(s));
+    });
+    sendRawToClient("null");
+    sendRawToClient("[]");
+    sendRawToClient(JSON.stringify({ nope: true }));
+    sendToClient(makeStatusFrame(1));
+
+    const status = await statusPromise;
+    expect(status.protocolVersion).toBe(1);
+    expect((client as any).ws?.readyState).toBe(WebSocket.OPEN);
   });
 
   test("sendReply returns error when not connected", async () => {
@@ -305,6 +468,31 @@ describe("DaemonClient", () => {
     const result = await replyPromise;
     expect(result.success).toBe(false);
     expect(result.error).toContain("disconnected");
+  });
+
+  test("protocol_error resolves matching pending reply", async () => {
+    onServerMessage = (ws: any, raw: any) => {
+      const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+      if (msg.type !== "claude_to_codex") return;
+      ws.send(JSON.stringify({
+        type: "protocol_error",
+        requestId: msg.requestId,
+        error: "Unsupported message type: claude_to_codex",
+      }));
+    };
+
+    await client.connect();
+
+    const result = await client.sendReply({
+      id: "r-protocol-error",
+      source: "claude",
+      content: "will error",
+      timestamp: Date.now(),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("Daemon protocol error: Unsupported message type: claude_to_codex");
+    expect((client as any).pendingReplies.size).toBe(0);
   });
 
   test("can reconnect after disconnect", async () => {
@@ -376,6 +564,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const handle = client.sendAskCodex(
       makeClaudeMessage("chat-slice-1", "question"),
       60000,
@@ -417,6 +606,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const handle = client.sendAskCodex(makeClaudeMessage(), 60000);
     await requestSeen;
 
@@ -470,6 +660,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const resultPromise = client.sendAskCodex(makeClaudeMessage(), 5).result;
     await requestSeen;
 
@@ -495,6 +686,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
@@ -506,6 +698,63 @@ describe("DaemonClient", () => {
     expect(result.outcome).toBe("bridge_error");
     expect(result.metadata.error).toContain("disconnected");
     expect((client as any).pendingWaits.size).toBe(0);
+  });
+
+  test("protocol_error finalizes matching pending wait with bridge_error", async () => {
+    let resolveRequestSeen!: () => void;
+    const requestSeen = new Promise<void>((resolve) => {
+      resolveRequestSeen = resolve;
+    });
+
+    onServerMessage = (ws: any, raw: any) => {
+      const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+      if (msg.type !== "claude_to_codex_wait") return;
+      ws.send(JSON.stringify({
+        type: "protocol_error",
+        requestId: msg.requestId,
+        error: "Unsupported message type: claude_to_codex_wait",
+      }));
+      resolveRequestSeen();
+    };
+
+    await client.connect();
+    await sendDaemonStatus(1);
+
+    const startedAt = Date.now();
+    const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
+    await requestSeen;
+    const result = await resultPromise;
+
+    expect(result.outcome).toBe("bridge_error");
+    expect(result.completionSignal).toBe("agentbridge_error");
+    expect(result.metadata.elapsed_ms).toBeLessThan(100);
+    expect(Date.now() - startedAt).toBeLessThan(100);
+    expect(result.metadata.error).toBe("Daemon protocol error: Unsupported message type: claude_to_codex_wait");
+    expect((client as any).pendingWaits.size).toBe(0);
+  });
+
+  test("protocol_error for unknown requestId logs warning and does not disconnect", async () => {
+    await client.connect();
+
+    const originalWrite = process.stderr.write;
+    let stderr = "";
+    process.stderr.write = ((chunk: any) => {
+      stderr += String(chunk);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      sendToClient({
+        type: "protocol_error",
+        requestId: "unknown_request",
+        error: "Unsupported message type: future",
+      });
+      await delay(10);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+
+    expect(stderr).toContain("received protocol_error for unknown requestId unknown_request");
+    expect((client as any).ws?.readyState).toBe(WebSocket.OPEN);
   });
 
   test("pending wait finalizes on explicit disconnect", async () => {
@@ -520,6 +769,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
@@ -554,6 +804,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
@@ -589,6 +840,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const resultPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     await requestSeen;
 
@@ -628,6 +880,7 @@ describe("DaemonClient", () => {
     };
 
     await client.connect();
+    await sendDaemonStatus(1);
     const waitPromise = client.sendAskCodex(makeClaudeMessage(), 60000).result;
     let resolvedCount = 0;
     const observedPromise = waitPromise.then((result) => {

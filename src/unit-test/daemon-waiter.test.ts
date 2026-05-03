@@ -51,6 +51,25 @@ function sendControl(ws: MockControlSocket, message: ControlClientMessage) {
   __daemonTest.handleControlMessage(ws as any, JSON.stringify(message));
 }
 
+function sendRawControl(ws: MockControlSocket, raw: unknown) {
+  __daemonTest.handleControlMessage(ws as any, JSON.stringify(raw));
+}
+
+function captureStderr(fn: () => void) {
+  const originalWrite = process.stderr.write;
+  let output = "";
+  process.stderr.write = ((chunk: any) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    fn();
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+  return output;
+}
+
 function waitResults(ws: MockControlSocket) {
   return ws.sent.filter((msg) => msg.type === "codex_to_claude_wait_result");
 }
@@ -90,6 +109,37 @@ describe("daemon active waiter", () => {
     expect(result.messages.map((msg) => msg.id)).toEqual(["codex_1", "codex_2"]);
     expect(__daemonTest.getActiveWaiter()).toBeNull();
     expect(__daemonTest.getBufferedMessages()).toEqual([]);
+  });
+
+  test("unknown control message logs and returns protocol_error when requestId is present", () => {
+    const ws = createSocket();
+
+    const stderr = captureStderr(() => {
+      sendRawControl(ws, {
+        type: "future_control_message",
+        requestId: "future_1",
+      });
+    });
+
+    expect(stderr).toContain("Received unknown control message type: future_control_message (requestId=future_1)");
+    expect(ws.sent).toEqual([
+      {
+        type: "protocol_error",
+        requestId: "future_1",
+        error: "Unsupported message type: future_control_message",
+      },
+    ]);
+  });
+
+  test("malformed control message is logged and ignored before switch", () => {
+    const ws = createSocket();
+
+    const stderr = captureStderr(() => {
+      sendRawControl(ws, null);
+    });
+
+    expect(stderr).toContain("Rejecting malformed control message");
+    expect(ws.sent).toEqual([]);
   });
 
   test("busy second wait returns immediate busy result without replacing active waiter", () => {

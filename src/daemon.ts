@@ -57,6 +57,7 @@ const FILTER_MODE: FilterMode =
   (process.env.AGENTBRIDGE_FILTER_MODE as FilterMode) === "full" ? "full" : "filtered";
 const IDLE_SHUTDOWN_MS = parseInt(process.env.AGENTBRIDGE_IDLE_SHUTDOWN_MS ?? String(config.idleShutdownSeconds * 1000), 10);
 const ATTENTION_WINDOW_MS = parseInt(process.env.AGENTBRIDGE_ATTENTION_WINDOW_MS ?? String(config.turnCoordination.attentionWindowSeconds * 1000), 10);
+const PROTOCOL_VERSION = 1;
 
 const daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
 
@@ -299,14 +300,21 @@ function startControlServer() {
 }
 
 function handleControlMessage(ws: ServerWebSocket<ControlSocketData>, raw: string | Buffer) {
-  let message: ControlClientMessage;
+  let parsed: unknown;
   try {
     const text = typeof raw === "string" ? raw : raw.toString();
-    message = JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch (e: any) {
     log(`Failed to parse control message: ${e.message}`);
     return;
   }
+
+  if (!isControlMessageObject(parsed)) {
+    log(`Rejecting malformed control message (${describeMalformedPayload(parsed)})`);
+    return;
+  }
+
+  const message = parsed as ControlClientMessage;
 
   switch (message.type) {
     case "claude_connect":
@@ -376,7 +384,35 @@ function handleControlMessage(ws: ServerWebSocket<ControlSocketData>, raw: strin
       });
       return;
     }
+    default: {
+      const unknownMessage = message as unknown as { type?: unknown; requestId?: unknown };
+      const type = unknownMessage.type;
+      const requestId = unknownMessage.requestId;
+      log(`Received unknown control message type: ${type ?? "<missing>"} (requestId=${requestId ?? "n/a"})`);
+      if (typeof requestId === "string") {
+        sendProtocolMessage(ws, {
+          type: "protocol_error",
+          requestId,
+          error: `Unsupported message type: ${type ?? "<missing>"}`,
+        });
+      }
+      return;
+    }
   }
+}
+
+function isControlMessageObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && typeof (value as { type?: unknown }).type === "string";
+}
+
+function describeMalformedPayload(value: unknown): string {
+  let payload = "";
+  try {
+    payload = JSON.stringify(value);
+  } catch {
+    payload = "<unserializable>";
+  }
+  return `type=${typeof value}, payload=${String(payload).slice(0, 200)}`;
 }
 
 function handleWaitRequest(
@@ -801,6 +837,7 @@ function sendProtocolMessage(ws: ServerWebSocket<ControlSocketData>, message: Co
 function currentStatus(): DaemonStatus {
   const snapshot = tuiConnectionState.snapshot();
   return {
+    protocolVersion: PROTOCOL_VERSION,
     bridgeReady: tuiConnectionState.canReply(),
     tuiConnected: snapshot.tuiConnected,
     threadId: codex.activeThreadId,

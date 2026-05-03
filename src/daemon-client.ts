@@ -50,6 +50,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
   private wsId: number = 0; // Track socket identity for debugging
   private nextRequestId = 1;
   private readonly waitResultGraceMs: number;
+  private daemonProtocolVersion: number | null = null;
   private pendingReplies = new Map<
     string,
     {
@@ -83,6 +84,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     }
 
     const socketId = ++nextSocketId;
+    this.daemonProtocolVersion = null;
 
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.url);
@@ -124,6 +126,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     } catch {}
 
     this.ws = null;
+    this.daemonProtocolVersion = null;
     this.rejectPendingReplies("Daemon connection closed");
     this.rejectPendingWaits("Daemon connection closed", "disconnect");
 
@@ -172,6 +175,20 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
           outcome: "bridge_error",
           completionSignal: "agentbridge_error",
           error: "AgentBridge daemon is not connected.",
+        })),
+      };
+    }
+
+    if (this.daemonProtocolVersion === null || this.daemonProtocolVersion < 1) {
+      return {
+        requestId,
+        result: Promise.resolve(this.makeLocalWaitResult({
+          requestId,
+          message,
+          startedAt,
+          outcome: "bridge_error",
+          completionSignal: "agentbridge_error",
+          error: this.protocolVersionError(),
         })),
       };
     }
@@ -283,12 +300,19 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     ws.onmessage = (event) => {
       const raw = typeof event.data === "string" ? event.data : event.data.toString();
 
-      let message: ControlServerMessage;
+      let parsed: unknown;
       try {
-        message = JSON.parse(raw);
+        parsed = JSON.parse(raw);
       } catch {
         return;
       }
+
+      if (!isControlMessageObject(parsed)) {
+        this.log(`Rejecting malformed daemon message (${describeMalformedPayload(parsed)})`);
+        return;
+      }
+
+      const message = parsed as ControlServerMessage;
 
       switch (message.type) {
         case "codex_to_claude":
@@ -300,6 +324,36 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
           clearTimeout(pending.timer);
           this.pendingReplies.delete(message.requestId);
           pending.resolve({ success: message.success, error: message.error });
+          return;
+        }
+        case "protocol_error": {
+          const error = `Daemon protocol error: ${message.error}`;
+          const pendingReply = this.pendingReplies.get(message.requestId);
+          if (pendingReply) {
+            clearTimeout(pendingReply.timer);
+            this.pendingReplies.delete(message.requestId);
+            pendingReply.resolve({ success: false, error });
+            return;
+          }
+
+          const pendingWait = this.pendingWaits.get(message.requestId);
+          if (pendingWait) {
+            this.finalizePendingWait(
+              message.requestId,
+              "protocol_error",
+              this.makeLocalWaitResult({
+                requestId: message.requestId,
+                message: pendingWait.message,
+                startedAt: pendingWait.startedAt,
+                outcome: "bridge_error",
+                completionSignal: "agentbridge_error",
+                error,
+              }),
+            );
+            return;
+          }
+
+          this.log(`received protocol_error for unknown requestId ${message.requestId}: ${message.error}`);
           return;
         }
         case "codex_to_claude_wait_result":
@@ -315,7 +369,13 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
           );
           return;
         case "status":
-          this.emit("status", message.status);
+          this.daemonProtocolVersion = typeof message.status.protocolVersion === "number"
+            ? message.status.protocolVersion
+            : 0;
+          this.emit("status", {
+            ...message.status,
+            protocolVersion: this.daemonProtocolVersion,
+          });
           return;
       }
     };
@@ -325,6 +385,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       this.log(`ws#${socketId} onclose (code=${event.code}, reason=${event.reason || "none"}, isCurrent=${isCurrent}, currentWsId=${this.wsId})`);
       if (isCurrent) {
         this.ws = null;
+        this.daemonProtocolVersion = null;
         this.rejectPendingReplies("AgentBridge daemon disconnected.");
         this.rejectPendingWaits("AgentBridge daemon disconnected.", "ws_close");
         if (event.code === CLOSE_CODE_REPLACED) {
@@ -421,6 +482,14 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     };
   }
 
+  private protocolVersionError(): string {
+    if (this.daemonProtocolVersion === null) {
+      return "AgentBridge daemon protocol version not yet known (status frame not received). This usually resolves in <1s — retry. If persistent, check daemon health at /healthz.";
+    }
+
+    return `AgentBridge daemon is v${this.daemonProtocolVersion} (no \`claude_to_codex_wait\` support). ask_codex requires daemon protocol v1+. Run \`cd /path/to/agent-bridge && npm install -g .\` (or \`npm link\` from your dev source), then \`agentbridge kill\` and restart Codex with \`agentbridge codex\`.`;
+  }
+
   private send(message: ControlClientMessage) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("AgentBridge daemon socket is not open.");
@@ -432,4 +501,18 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
   private log(msg: string) {
     process.stderr.write(`[${new Date().toISOString()}] [DaemonClient] ${msg}\n`);
   }
+}
+
+function isControlMessageObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && typeof (value as { type?: unknown }).type === "string";
+}
+
+function describeMalformedPayload(value: unknown): string {
+  let payload = "";
+  try {
+    payload = JSON.stringify(value);
+  } catch {
+    payload = "<unserializable>";
+  }
+  return `type=${typeof value}, payload=${String(payload).slice(0, 200)}`;
 }

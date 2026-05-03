@@ -1,6 +1,7 @@
 import type { BridgeMessage } from "./types";
 
 export interface DaemonStatus {
+  protocolVersion: number;
   bridgeReady: boolean;
   tuiConnected: boolean;
   threadId: string | null;
@@ -30,7 +31,7 @@ export type DaemonFinalizeSource =
 
 export type DaemonClientFinalizeSource =
   | "wait_result_received" | "timeout" | "abort_signal"
-  | "ws_close" | "disconnect";
+  | "ws_close" | "disconnect" | "protocol_error";
 
 export interface AskCodexResultMetadata {
   requestId?: string;
@@ -73,6 +74,7 @@ export type ControlClientMessage =
 export type ControlServerMessage =
   | { type: "codex_to_claude"; message: BridgeMessage }
   | { type: "claude_to_codex_result"; requestId: string; success: boolean; error?: string }
+  | { type: "protocol_error"; requestId: string; error: string }
   | ({
       type: "codex_to_claude_wait_result";
       requestId: string;
