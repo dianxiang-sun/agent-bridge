@@ -117,7 +117,7 @@ codex.on("turnStarted", () => {
   emitToClaude(
     systemMessage(
       "system_turn_started",
-      "⏳ Codex is working on the current task. Wait for completion before sending a reply.",
+      "⏳ Codex is working on the current turn. Do not interleave reply or get_messages polling; wait for the owning tool result or normal completion routing.",
     ),
   );
 });
@@ -188,7 +188,7 @@ codex.on("turnCompleted", () => {
     emitToClaude(
       systemMessage(
         "system_reply_missing",
-        "⚠️ Codex completed the turn without sending a reply (require_reply was set). Codex may not have generated an agentMessage. You may want to retry or rephrase.",
+        "⚠️ Codex completed an injected turn without any agentMessage (require_reply was set). Do not retry automatically; ask the user before re-sending, and use ask_codex for tasks needing a result.",
       ),
     );
   }
@@ -200,7 +200,7 @@ codex.on("turnCompleted", () => {
   emitToClaude(
     systemMessage(
       "system_turn_completed",
-      "✅ Codex finished the current turn. You can reply now if needed.",
+      "✅ Codex finished the current turn. Use ask_codex for follow-up tasks that need a result; use reply only for one-way notifications.",
     ),
   );
   startAttentionWindow();

@@ -298,7 +298,9 @@ describe("Dual-mode transport: reply pending hint", () => {
     adapter.replySender = async () => ({ success: true });
 
     const result = await adapter.handleReply({ chat_id: "test", text: "hello codex" });
-    expect(result.content[0].text).toBe("Reply sent to Codex.");
+    expect(result.content[0].text).toBe(
+      "Reply sent to Codex. Fire-and-forget: does not wait for a response.",
+    );
   });
 
   test("handleReply returns error when text is missing", async () => {

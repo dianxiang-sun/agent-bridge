@@ -1741,7 +1741,7 @@ codex.on("turnStarted", () => {
     log(`Suppressing system_turn_started during active waiter ${activeWaiter.requestId}`);
     return;
   }
-  emitToClaude(systemMessage("system_turn_started", "\u23F3 Codex is working on the current task. Wait for completion before sending a reply."));
+  emitToClaude(systemMessage("system_turn_started", "\u23F3 Codex is working on the current turn. Do not interleave reply or get_messages polling; wait for the owning tool result or normal completion routing."));
 });
 codex.on("agentMessage", (msg) => {
   if (msg.source !== "codex")
@@ -1796,11 +1796,11 @@ codex.on("turnCompleted", () => {
   statusBuffer.flush("turn completed");
   if (replyRequired && !replyReceivedDuringTurn) {
     log("\u26A0\uFE0F Reply was required but Codex did not send any agentMessage");
-    emitToClaude(systemMessage("system_reply_missing", "\u26A0\uFE0F Codex completed the turn without sending a reply (require_reply was set). Codex may not have generated an agentMessage. You may want to retry or rephrase."));
+    emitToClaude(systemMessage("system_reply_missing", "\u26A0\uFE0F Codex completed an injected turn without any agentMessage (require_reply was set). Do not retry automatically; ask the user before re-sending, and use ask_codex for tasks needing a result."));
   }
   replyRequired = false;
   replyReceivedDuringTurn = false;
-  emitToClaude(systemMessage("system_turn_completed", "\u2705 Codex finished the current turn. You can reply now if needed."));
+  emitToClaude(systemMessage("system_turn_completed", "\u2705 Codex finished the current turn. Use ask_codex for follow-up tasks that need a result; use reply only for one-way notifications."));
   startAttentionWindow();
 });
 codex.on("ready", (threadId) => {

@@ -16,9 +16,10 @@ describe("role-aware collaboration guidance", () => {
   });
 
   test("claude instructions include turn coordination guidance", () => {
-    expect(CLAUDE_INSTRUCTIONS).toContain("Codex is working");
-    expect(CLAUDE_INSTRUCTIONS).toContain("Codex finished");
-    expect(CLAUDE_INSTRUCTIONS).toContain("busy error");
+    expect(CLAUDE_INSTRUCTIONS).toContain("ask_codex is the primary RPC");
+    expect(CLAUDE_INSTRUCTIONS).toContain("Do NOT use reply + get_messages as a task workflow");
+    expect(CLAUDE_INSTRUCTIONS).toContain("turn_completed with empty messages");
+    expect(CLAUDE_INSTRUCTIONS).toContain("busy");
   });
 
   test("bridge contract reminder includes codex role guidance", () => {

@@ -1,7 +1,7 @@
 {
   "name": "agentbridge",
   "version": "0.1.7",
-  "description": "Bridge Claude Code and Codex with a shared daemon, push channel delivery, and bidirectional reply tooling.",
+  "description": "Bridge Claude Code and Codex with a shared daemon, synchronous ask_codex RPC, and optional channel delivery.",
   "author": {
     "name": "AgentBridge Contributors",
     "email": "raysonmeng@qq.com"

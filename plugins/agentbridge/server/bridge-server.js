@@ -13720,13 +13720,12 @@ var ASK_CODEX_MAX_TIMEOUT_MS = 7200000;
 var CLAUDE_INSTRUCTIONS = [
   "Codex is an AI coding agent (OpenAI) running in a separate session on the same machine.",
   "",
-  "## Message delivery",
-  "Messages from Codex may arrive in two ways depending on the connection mode:",
-  '- As <channel source="agentbridge" chat_id="..." user="Codex" ...> tags (push mode)',
-  "- Via the get_messages tool (pull mode)",
+  "## Message delivery \u2014 ask_codex is the primary RPC",
+  "For Claude-initiated Codex tasks (verification, review, implementation, debugging), use the ask_codex tool. It synchronously sends the task, waits for the Codex turn to finish or time out, and returns a JSON result with outcome, completionSignal, messages, and metadata.",
+  "",
+  "Do NOT use reply + get_messages as a task workflow. The reply tool is one-way fire-and-forget \u2014 it does not wait for completion, return Codex's answer, or interrupt active work. The get_messages tool drains unsolicited / background messages, not task results.",
   "",
   "## Collaboration roles",
-  "Default roles in this setup:",
   "- Claude: Reviewer, Planner, Hypothesis Challenger",
   "- Codex: Implementer, Executor, Reproducer/Verifier",
   "- Expect Codex to provide independent technical judgment and evidence, not passive agreement.",
@@ -13740,15 +13739,16 @@ var CLAUDE_INSTRUCTIONS = [
   '- Use explicit phrases such as "My independent view is:", "I agree on:", "I disagree on:", and "Current consensus:".',
   "",
   "## How to interact",
-  "- Use the reply tool to send messages back to Codex \u2014 pass chat_id back.",
-  "- Use the get_messages tool to check for pending messages from Codex.",
-  "- After sending a reply, call get_messages to check for responses.",
-  "- When the user asks about Codex status or progress, call get_messages.",
+  "- ask_codex: any task needing a Codex result. Inspect outcome, completionSignal, messages, metadata before continuing.",
+  "- get_messages: only for unsolicited / background messages, or after transport uncertainty.",
+  "- reply: one-way injection only, when no Codex response is needed.",
+  "- Do NOT autonomously schedule Bash sleep + get_messages polling.",
   "",
   "## Turn coordination",
-  "- When you see '\u23F3 Codex is working', do NOT call the reply tool \u2014 wait for '\u2705 Codex finished'.",
-  "- After Codex finishes a turn, you have an attention window to review and respond before new messages arrive.",
-  "- If the reply tool returns a busy error, Codex is still executing \u2014 wait and try again later."
+  "- ask_codex returns busy: another waiter is in flight; wait or ask the user.",
+  "- ask_codex returns timeout/cancelled: Codex may continue and later messages arrive via normal routing.",
+  "- ask_codex returns turn_completed with empty messages: treat as suspicious; tell the user, do not retry automatically.",
+  "- Transport error before completion: do not blindly retry \u2014 check get_messages first; if empty, ask the user before retrying."
 ].join(`
 `);
 
@@ -13901,7 +13901,7 @@ ${formatted}`
       tools: [
         {
           name: "reply",
-          description: "Send a message back to Codex. Your reply will be injected into the Codex session as a new user turn.",
+          description: "DEPRECATED FOR TASKS. One-way fire-and-forget injection into Codex. Does NOT wait for completion, return Codex's answer, or interrupt active work. Use ask_codex for tasks needing a result.",
           inputSchema: {
             type: "object",
             properties: {
@@ -13915,7 +13915,7 @@ ${formatted}`
               },
               require_reply: {
                 type: "boolean",
-                description: "When true, Codex is required to send a reply. All Codex messages from this turn will be forwarded immediately (bypassing STATUS buffering). Use this when you need a direct answer from Codex."
+                description: "Legacy filtering hint for injected turns: when true, Codex agentMessages from this turn are forwarded immediately (bypassing STATUS buffering). It does NOT make reply wait for completion and does NOT return Codex's answer to Claude. For tasks where you need a direct answer from Codex, use ask_codex instead, not reply with require_reply=true."
               }
             },
             required: ["text"]
@@ -13923,7 +13923,7 @@ ${formatted}`
         },
         {
           name: "get_messages",
-          description: "Check for new messages from Codex. Call this after sending a reply or when you expect a response from Codex.",
+          description: "Drain unsolicited / background Codex messages from the pull queue. Use after transport uncertainty only to check whether a prior task produced queued messages, or when the user explicitly asks about Codex status. Do not use as routine polling for task completion \u2014 use ask_codex for that (it waits synchronously and returns task results in one call).",
           inputSchema: {
             type: "object",
             properties: {},
@@ -13932,7 +13932,7 @@ ${formatted}`
         },
         {
           name: "ask_codex",
-          description: "Send a question to Codex and wait for the Codex turn to finish or time out.",
+          description: "Primary RPC for Claude-initiated Codex tasks. Sends the task to Codex, waits synchronously for the turn to finish or time out (timeout_ms clamped 10s-2h, default 10 min), and returns a JSON result with outcome, completionSignal, messages, and metadata. Use this for any task where you need Codex to answer, verify, implement, review, debug, or report completion.",
           inputSchema: {
             type: "object",
             properties: {
@@ -14003,9 +14003,9 @@ ${formatted}`
       };
     }
     const pending = this.pendingMessages.length;
-    let responseText = "Reply sent to Codex.";
+    let responseText = "Reply sent to Codex. Fire-and-forget: does not wait for a response.";
     if (pending > 0) {
-      responseText += ` Note: ${pending} unread Codex message${pending > 1 ? "s" : ""} already waiting \u2014 call get_messages to read them.`;
+      responseText += ` Note: ${pending} unread Codex message${pending > 1 ? "s" : ""} (unsolicited) already waiting \u2014 call get_messages only to drain them. Use ask_codex when you need a response from Codex.`;
     }
     return {
       content: [{ type: "text", text: responseText }]
