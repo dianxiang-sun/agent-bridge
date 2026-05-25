@@ -30,14 +30,29 @@ printf '%s' "$now" >"$stamp_file" 2>/dev/null || true
 health_json="$(curl -fsS --max-time 1 "http://127.0.0.1:${port}/healthz" 2>/dev/null || true)"
 
 if [ -n "$health_json" ]; then
+  # NOTE: the healthz "bridgeReady" field is the daemon's canReply() (see src/daemon.ts
+  # currentStatus), i.e. rawBridgeReady && (tuiConnected || reconnect-grace) — NOT the raw
+  # bridge-thread flag. Treat it as can_reply here so the hint matches actual reply-ability.
   tui_connected="false"
-  if printf '%s' "$health_json" | grep -q '"tuiConnected":true'; then
+  can_reply="false"
+  if printf '%s' "$health_json" | grep -Eq '"tuiConnected"[[:space:]]*:[[:space:]]*true'; then
     tui_connected="true"
   fi
+  if printf '%s' "$health_json" | grep -Eq '"bridgeReady"[[:space:]]*:[[:space:]]*true'; then
+    can_reply="true"
+  fi
 
-  if [ "$tui_connected" = "true" ]; then
+  if [ "$can_reply" = "true" ] && [ "$tui_connected" = "true" ]; then
     cat <<EOF
 {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"AgentBridge is running. Daemon healthy, Codex TUI connected. Bridge is ready for communication."}}
+EOF
+  elif [ "$tui_connected" = "true" ]; then
+    cat <<EOF
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"AgentBridge daemon and Codex TUI are connected, but the bridge thread is not ready yet — replies will be rejected until it is. It may still be initializing; retry shortly."}}
+EOF
+  elif [ "$can_reply" = "true" ]; then
+    cat <<EOF
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"AgentBridge daemon is running. Codex TUI recently disconnected; the bridge is still in the reconnect grace window. If this persists, start Codex in another terminal with: agentbridge codex"}}
 EOF
   else
     cat <<EOF
