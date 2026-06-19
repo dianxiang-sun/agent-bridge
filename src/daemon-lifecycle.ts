@@ -373,6 +373,12 @@ export class DaemonLifecycle {
       return false;
     }
 
+    // Identity verified — write the killed sentinel NOW (atomic with the gate that authorized
+    // the kill, before any signal). This prevents a frontend relaunch during shutdown AND
+    // ensures a REFUSED kill (mismatch above → early return) never leaves a stale sentinel
+    // (Codex R3 red-team #1: a separate earlier preflight could flip between check and mark).
+    this.markKilled();
+
     // Try graceful shutdown first (SIGTERM)
     this.log(`Sending SIGTERM to daemon pid ${pid}`);
     try {

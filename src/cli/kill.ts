@@ -2,39 +2,73 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, unlinkSync } from "node:fs";
 import { StateDirResolver } from "../state-dir";
 import { DaemonLifecycle, isProcessAlive } from "../daemon-lifecycle";
-import { resolveKillChannel } from "./channel-args";
+import { profileToEnv, isValidChannelProfile, type ChannelProfile } from "../channel-profile";
+import { resolveKillScope } from "./channel-args";
 
 export async function runKill(args: string[] = []) {
-  // Resolve & strip --channel. A named channel applies its env so kill targets that channel's
-  // state dir + control port (read-only: a missing named channel throws). No --channel = default.
-  const resolved = resolveKillChannel(args);
-  if (resolved.env) Object.assign(process.env, resolved.env);
+  // Context-aware (用户纠偏 2026-06-20): no args = the channel THIS process is in (or default);
+  // <name>/--channel = that named channel; --all = every named channel (NOT legacy default).
+  const scope = resolveKillScope(args);
 
   console.log("AgentBridge Kill — stopping daemon and managed Codex TUI\n");
 
-  const stateDir = new StateDirResolver();
-  const controlPort = parseInt(process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502", 10);
+  if (scope.mode === "all") {
+    if (scope.profiles.length === 0) {
+      console.log("No named channels to kill.");
+      return;
+    }
+    let any = false;
+    for (const profile of scope.profiles) {
+      console.log(`[channel ${profile.channelId}]`);
+      if (await killOneTarget(profile, false)) any = true;
+    }
+    console.log(any ? "\nNamed channels stopped." : "\nNo running named channels found.");
+    return;
+  }
 
-  const lifecycle = new DaemonLifecycle({
-    stateDir,
-    controlPort,
-    log: (msg) => console.log(`  ${msg}`),
-  });
-
-  // Mark the daemon as intentionally stopped before terminating the process.
-  // This closes the reconnect race where the frontend sees the disconnect
-  // before the sentinel is written and relaunches the daemon.
-  lifecycle.markKilled();
-  const tuiKilled = await killManagedCodexTui(stateDir, (msg) => console.log(`  ${msg}`));
-  const killed = await lifecycle.kill();
-
-  if (killed || tuiKilled) {
+  const killed = await killOneTarget(scope.profile, scope.mode === "default");
+  if (killed) {
     console.log("\nAgentBridge stopped.");
     console.log("Please restart Claude Code (`agentbridge claude`), switch to a new conversation, or run `/resume` to fully disconnect.");
   } else {
     console.log("\nNo running AgentBridge daemon or managed Codex TUI found.");
     console.log("Stale state files cleaned up (if any).");
   }
+}
+
+/**
+ * Kill one channel's daemon + managed Codex TUI, targeting its OWN state dir / control port
+ * explicitly (no process.env mutation — safe to call in an --all loop without bleeding one
+ * channel's env into the next). A named channel binds channelEnv so the kill identity gate
+ * actually runs (red-team #1: the old runKill never passed it → the gate silently no-op'd).
+ *
+ * The identity gate AND the killed-sentinel write are owned by lifecycle.kill() atomically
+ * (Codex R3 #1): a named channel verifies {channelId,controlPort,pid} and only marks+signals
+ * on success; default skips the hard check (零回归). A malformed/corrupt profile is refused up
+ * front (red-team #2) so its missing stateDir can't make StateDirResolver fall back to the
+ * ambient env (which would, under --all, write a sentinel into the wrong channel).
+ */
+async function killOneTarget(profile: ChannelProfile, isDefault: boolean): Promise<boolean> {
+  const log = (msg: string) => console.log(`  ${msg}`);
+  if (!isValidChannelProfile(profile)) {
+    log(`skipping invalid/corrupt registry entry '${profile.channelId ?? "?"}' (run 'abg gc')`);
+    return false;
+  }
+
+  const stateDir = new StateDirResolver(profile.stateDir);
+  const lifecycle = new DaemonLifecycle({
+    stateDir,
+    controlPort: profile.controlPort,
+    log,
+    channelEnv: isDefault ? undefined : profileToEnv(profile),
+  });
+
+  // TUI is killed independently (its own pid + cmdline guard). lifecycle.kill() then runs the
+  // identity gate and writes the killed sentinel only after it passes — no separate preflight
+  // that could flip between check and mark.
+  const tuiKilled = await killManagedCodexTui(stateDir, log);
+  const killed = await lifecycle.kill();
+  return killed || tuiKilled;
 }
 
 async function killManagedCodexTui(

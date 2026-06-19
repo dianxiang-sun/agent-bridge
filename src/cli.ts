@@ -49,6 +49,10 @@ async function main() {
       const { runChannel } = await import("./cli/channel");
       await runChannel(restArgs);
       break;
+    case "gc":
+      const { runGc } = await import("./cli/gc");
+      await runGc(restArgs);
+      break;
     case "--help":
     case "-h":
     case undefined:

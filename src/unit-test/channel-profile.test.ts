@@ -21,6 +21,9 @@ import {
   codexHomeBaseDir,
   ChannelRegistry,
   setupChannelHome,
+  classifyChannel,
+  isValidChannelProfile,
+  type ChannelProfile,
 } from "../channel-profile";
 
 describe("parseChannelId (契约9)", () => {
@@ -186,5 +189,129 @@ describe("setupChannelHome (契约7 symlink + 权限)", () => {
     const text = readFileSync(chCfg, "utf-8");
     expect(text).not.toContain(realRoot);
     expect(text).toContain(p.codexHome);
+  });
+});
+
+// ── PR5 Task 5.1: classifyChannel 五态 (契约6) ───────────────────────────
+function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const port = (srv.address() as { port: number }).port;
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
+function makeProfile(channelId: string, controlPort: number, stateDir: string): ChannelProfile {
+  return {
+    channelId,
+    controlPort,
+    codexAppPort: controlPort - 2,
+    codexProxyPort: controlPort - 1,
+    stateDir,
+    codexHome: join(stateDir, "codex-home"),
+  };
+}
+
+describe("classifyChannel 五态 (契约6)", () => {
+  let root: string;
+  const servers: Array<{ stop: (closeActiveConnections?: boolean) => void }> = [];
+  const closers: Array<() => Promise<void>> = [];
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "abg-classify-")); });
+  afterEach(async () => {
+    for (const s of servers.splice(0)) { try { s.stop(true); } catch {} }
+    for (const c of closers.splice(0)) { try { await c(); } catch {} }
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function serveHealthz(port: number, body: unknown) {
+    const srv = Bun.serve({ port, hostname: "127.0.0.1", fetch: () => Response.json(body as any) });
+    servers.push(srv);
+  }
+  async function occupyPort(port: number) {
+    const srv = createServer();
+    await new Promise<void>((res, rej) => { srv.once("error", rej); srv.listen(port, "127.0.0.1", () => res()); });
+    closers.push(() => new Promise<void>((res) => srv.close(() => res())));
+  }
+  function mkState(id: string): string {
+    const d = join(root, id);
+    mkdirSync(d, { recursive: true });
+    return d;
+  }
+
+  test("running: healthz 可达 + channelId/controlPort 匹配 profile", async () => {
+    const port = await getFreePort();
+    const sd = mkState("A");
+    serveHealthz(port, { channelId: "A", controlPort: port, pid: process.pid });
+    expect(await classifyChannel(makeProfile("A", port, sd))).toBe("running");
+  });
+
+  test("stopped: 端口空 + 无 pidfile(profile 保留可复用)", async () => {
+    const port = await getFreePort();
+    const sd = mkState("B");
+    expect(await classifyChannel(makeProfile("B", port, sd))).toBe("stopped");
+  });
+
+  test("stale-dead: 端口空 + pidfile 指向死进程", async () => {
+    const port = await getFreePort();
+    const sd = mkState("C");
+    writeFileSync(join(sd, "daemon.pid"), "2147483646\n"); // 不可能存在的高 pid
+    expect(await classifyChannel(makeProfile("C", port, sd))).toBe("stale-dead");
+  });
+
+  test("stale-dead: 端口空 + pidfile 指向活进程但非 daemon(OS 复用 pid)", async () => {
+    const port = await getFreePort();
+    const sd = mkState("C2");
+    writeFileSync(join(sd, "daemon.pid"), `${process.pid}\n`); // 活,但本测试进程不是 daemon cmdline
+    expect(await classifyChannel(makeProfile("C2", port, sd))).toBe("stale-dead");
+  });
+
+  test("blocked-port: healthz 可达但 channelId mismatch(别人占我 control 端口)", async () => {
+    const port = await getFreePort();
+    const sd = mkState("D");
+    serveHealthz(port, { channelId: "WRONG", controlPort: port, pid: 1 });
+    expect(await classifyChannel(makeProfile("D", port, sd))).toBe("blocked-port");
+  });
+
+  test("blocked-port: healthz 不通 + status.blockedPort 记录且该端口仍被占", async () => {
+    const ctrl = await getFreePort();
+    const blocked = await getFreePort();
+    await occupyPort(blocked);
+    const sd = mkState("E");
+    writeFileSync(join(sd, "status.json"), JSON.stringify({ blockedPort: { port: blocked, role: "app", message: "occupied" } }));
+    expect(await classifyChannel(makeProfile("E", ctrl, sd))).toBe("blocked-port");
+  });
+
+  test("blocked-port stale → 不再算(status 记了但端口已 free + 无 pidfile → stopped)", async () => {
+    const ctrl = await getFreePort();
+    const freed = await getFreePort(); // 未占用
+    const sd = mkState("F");
+    writeFileSync(join(sd, "status.json"), JSON.stringify({ blockedPort: { port: freed, role: "app", message: "stale" } }));
+    expect(await classifyChannel(makeProfile("F", ctrl, sd))).toBe("stopped");
+  });
+
+  test("corrupt: profile 字段缺失/类型错", async () => {
+    const sd = mkState("G");
+    const bad = { channelId: "G", stateDir: sd } as unknown as ChannelProfile; // 缺端口
+    expect(await classifyChannel(bad)).toBe("corrupt");
+  });
+});
+
+// ── PR5: isValidChannelProfile (corrupt-entry guard, Codex R3 red-team #2) ──
+describe("isValidChannelProfile (防 kill --all 用损坏 entry 污染 ambient env)", () => {
+  test("完整 6 字段 → true", () => {
+    expect(isValidChannelProfile({
+      channelId: "A", controlPort: 4512, codexAppPort: 4510, codexProxyPort: 4511,
+      stateDir: "/s/A", codexHome: "/h/A",
+    })).toBe(true);
+  });
+
+  test("缺 stateDir / 缺端口 → false(否则 StateDirResolver(undefined) 会回退到 ambient env)", () => {
+    expect(isValidChannelProfile({ channelId: "bad" } as unknown as ChannelProfile)).toBe(false);
+    expect(isValidChannelProfile({
+      channelId: "bad", controlPort: 4512, codexAppPort: 4510, codexProxyPort: 4511, codexHome: "/h",
+    } as unknown as ChannelProfile)).toBe(false); // 缺 stateDir
   });
 });

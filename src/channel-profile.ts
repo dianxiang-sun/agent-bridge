@@ -8,6 +8,7 @@
  * This module is the outer orchestration layer; daemon internals are unchanged.
  */
 
+import { execFileSync } from "node:child_process";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import {
@@ -221,6 +222,29 @@ export class ChannelRegistry {
       this.writeAtomic(reg);
       return profile;
     });
+  }
+
+  /**
+   * Remove a channel's registry entry (gc / kill cleanup). REGISTRY-ONLY: never deletes the
+   * channel's codexHome or stateDir — those hold Codex sessions/memories/goals (用户拍板:
+   * 防数据丢失). Lock-guarded like allocate (never fail-open).
+   */
+  async remove(channelId: string): Promise<void> {
+    await this.withLock(async () => {
+      const reg = this.readRaw();
+      if (reg.channels[channelId] !== undefined) {
+        delete reg.channels[channelId];
+        this.writeAtomic(reg);
+      }
+    });
+  }
+
+  /**
+   * All registry entries as [channelId-key, profile] pairs. The map KEY is authoritative for
+   * removal even when a corrupt entry's profile.channelId field is missing/wrong.
+   */
+  entries(): Array<[string, ChannelProfile]> {
+    return Object.entries(this.readRaw().channels);
   }
 
   private readRaw(): RegistryFile {
@@ -456,4 +480,162 @@ export function assertChannelEnvConsistent(
  */
 export function channelMessagePrefix(channelId: string): string {
   return channelId === "default" ? "" : `[channel ${channelId}] `;
+}
+
+// ── PR5: channel state classification (契约6) ────────────────────────────
+
+/** Lifecycle state of a channel (契约6). */
+export type ChannelState = "running" | "stopped" | "stale-dead" | "blocked-port" | "corrupt";
+
+/**
+ * True iff all 6 profile fields are present & well-typed. A registry entry failing this is
+ * `corrupt`; kill --all also uses it to refuse acting on a malformed profile whose missing
+ * stateDir would make StateDirResolver(undefined) fall back to the AMBIENT env (Codex R3 #2).
+ */
+export function isValidChannelProfile(p: ChannelProfile): boolean {
+  return (
+    typeof p?.channelId === "string" && p.channelId.length > 0 &&
+    Number.isInteger(p?.controlPort) && p.controlPort > 0 &&
+    Number.isInteger(p?.codexAppPort) && p.codexAppPort > 0 &&
+    Number.isInteger(p?.codexProxyPort) && p.codexProxyPort > 0 &&
+    typeof p?.stateDir === "string" && p.stateDir.length > 0 &&
+    typeof p?.codexHome === "string" && p.codexHome.length > 0
+  );
+}
+
+/** Probe the daemon's /healthz; reachable carries the reported identity for comparison. */
+async function fetchHealthz(
+  controlPort: number,
+): Promise<{ reachable: boolean; channelId?: string; controlPort?: number; pid?: number }> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${controlPort}/healthz`);
+    if (!res.ok) return { reachable: false };
+    const j = (await res.json()) as { channelId?: string; controlPort?: number; pid?: number };
+    return { reachable: true, channelId: j.channelId, controlPort: j.controlPort, pid: j.pid };
+  } catch {
+    return { reachable: false };
+  }
+}
+
+/** Verify a live pid is actually an AgentBridge daemon by its cmdline (not an OS-reused pid). */
+function isDaemonProcess(pid: number): boolean {
+  try {
+    const cmd = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf-8" }).trim();
+    return cmd.includes("daemon") && (cmd.includes("agentbridge") || cmd.includes("agent_bridge"));
+  } catch {
+    return false;
+  }
+}
+
+function readDaemonPid(stateDir: string): number | null {
+  try {
+    const raw = readFileSync(new StateDirResolver(stateDir).pidFile, "utf-8").trim();
+    if (!raw) return null;
+    const pid = Number.parseInt(raw, 10);
+    return Number.isFinite(pid) ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+function readBlockedPort(stateDir: string): number | null {
+  try {
+    const raw = readFileSync(new StateDirResolver(stateDir).statusFile, "utf-8");
+    const port = (JSON.parse(raw) as { blockedPort?: { port?: number } })?.blockedPort?.port;
+    return typeof port === "number" ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Classify a channel into one of five lifecycle states (契约6). Priority top-down:
+ * corrupt (bad registry entry) → running (healthz identity ok) → blocked-port (someone
+ * else on our port, or a recorded-and-still-occupied blockedPort) → stale-dead (dead or
+ * OS-reused pid leftover) → stopped (no live process, profile retained & reusable).
+ * Never mutates anything.
+ *
+ * `running` keys on healthz identity, NOT readiness — readyz/bridgeReady may lag while
+ * Codex boots. A blockedPort recorded in status.json is re-probed (isPortFree) so a stale
+ * record doesn't pin the channel as blocked forever (which would block gc cleanup).
+ */
+export async function classifyChannel(profile: ChannelProfile): Promise<ChannelState> {
+  if (!isValidChannelProfile(profile)) return "corrupt";
+
+  const health = await fetchHealthz(profile.controlPort);
+  if (health.reachable) {
+    if (health.channelId === profile.channelId && health.controlPort === profile.controlPort) {
+      return "running";
+    }
+    return "blocked-port"; // healthz up but identity mismatch → another daemon on our port
+  }
+
+  // healthz unreachable from here on.
+  const recordedBlocked = readBlockedPort(profile.stateDir);
+  if (recordedBlocked !== null && !(await isPortFree(recordedBlocked))) {
+    return "blocked-port"; // recorded blocked port still occupied (re-probed to avoid stale)
+  }
+  if (!(await isPortFree(profile.controlPort))) {
+    return "blocked-port"; // control port occupied by an unverifiable process
+  }
+
+  // control port free → inspect pid leftovers.
+  const pid = readDaemonPid(profile.stateDir);
+  if (pid !== null) {
+    if (isProcessAlive(pid)) {
+      // alive but no healthz: daemon-shaped → conservatively blocked (starting/wedged, don't gc);
+      // not daemon-shaped → OS-reused pid, the pidfile is stale.
+      return isDaemonProcess(pid) ? "blocked-port" : "stale-dead";
+    }
+    return "stale-dead"; // pidfile points at a dead process
+  }
+  return "stopped"; // no live process, no stale pid — profile retained, reusable
+}
+
+// ── PR5: profile reconstruction for context-aware kill (用户纠偏 2026-06-20) ──
+
+/** Inverse of profileToEnv: reconstruct a ChannelProfile from a complete 6-key channel env. */
+export function profileFromChannelEnv(channelEnv: Record<string, string>): ChannelProfile {
+  return {
+    channelId: channelEnv[CHANNEL_ENV_KEYS.channelId],
+    controlPort: Number.parseInt(channelEnv[CHANNEL_ENV_KEYS.controlPort], 10),
+    codexAppPort: Number.parseInt(channelEnv[CHANNEL_ENV_KEYS.codexAppPort], 10),
+    codexProxyPort: Number.parseInt(channelEnv[CHANNEL_ENV_KEYS.codexProxyPort], 10),
+    stateDir: channelEnv[CHANNEL_ENV_KEYS.stateDir],
+    codexHome: channelEnv[CHANNEL_ENV_KEYS.codexHome],
+  };
+}
+
+/**
+ * Legacy default profile honoring the given env's overrides (零回归: a user who manually set
+ * AGENTBRIDGE_STATE_DIR / ports without a channel id still targets their own daemon).
+ */
+export function defaultProfileFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): ChannelProfile {
+  return {
+    channelId: "default",
+    controlPort: Number.parseInt(env.AGENTBRIDGE_CONTROL_PORT ?? "4502", 10),
+    codexAppPort: Number.parseInt(env.CODEX_WS_PORT ?? "4500", 10),
+    codexProxyPort: Number.parseInt(env.CODEX_PROXY_PORT ?? "4501", 10),
+    stateDir: env.AGENTBRIDGE_STATE_DIR ?? canonicalBase(),
+    codexHome: env.CODEX_HOME ?? join(homedir(), ".codex"),
+  };
+}
+
+/**
+ * Canonical default profile — fixed legacy ports (4500/4501/4502) + canonical state dir,
+ * IGNORING env overrides. Used for an EXPLICIT `kill default` issued from inside a named
+ * channel context, where the ambient AGENTBRIDGE_STATE_DIR points at the named channel
+ * (not the real default) and must NOT pollute the default target.
+ */
+export function canonicalDefaultProfile(): ChannelProfile {
+  return {
+    channelId: "default",
+    controlPort: 4502,
+    codexAppPort: 4500,
+    codexProxyPort: 4501,
+    stateDir: canonicalBase(),
+    codexHome: join(homedir(), ".codex"),
+  };
 }
