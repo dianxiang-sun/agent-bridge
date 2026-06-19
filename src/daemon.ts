@@ -12,6 +12,7 @@ import {
 } from "./message-filter";
 import { TuiConnectionState } from "./tui-connection-state";
 import { DaemonLifecycle } from "./daemon-lifecycle";
+import { channelEnvFromProcessEnv } from "./channel-profile";
 import { StateDirResolver } from "./state-dir";
 import { ConfigService } from "./config-service";
 import { CLOSE_CODE_REPLACED } from "./control-protocol";
@@ -61,7 +62,11 @@ const PROTOCOL_VERSION = 1;
 
 const daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
 
-const codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile);
+// PR3: bind the channel profile env explicitly onto the codex app-server spawn
+// (design §2 — CODEX_HOME is the only real isolation). default → undefined → legacy.
+const codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile, {
+  channelEnv: channelEnvFromProcessEnv(),
+});
 const attachCmd = `codex --enable tui_app_server --remote ${codex.proxyUrl}`;
 
 let controlServer: ReturnType<typeof Bun.serve> | null = null;

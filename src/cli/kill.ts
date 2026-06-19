@@ -2,8 +2,14 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, unlinkSync } from "node:fs";
 import { StateDirResolver } from "../state-dir";
 import { DaemonLifecycle, isProcessAlive } from "../daemon-lifecycle";
+import { resolveKillChannel } from "./channel-args";
 
-export async function runKill() {
+export async function runKill(args: string[] = []) {
+  // Resolve & strip --channel. A named channel applies its env so kill targets that channel's
+  // state dir + control port (read-only: a missing named channel throws). No --channel = default.
+  const resolved = resolveKillChannel(args);
+  if (resolved.env) Object.assign(process.env, resolved.env);
+
   console.log("AgentBridge Kill — stopping daemon and managed Codex TUI\n");
 
   const stateDir = new StateDirResolver();

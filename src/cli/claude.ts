@@ -2,13 +2,26 @@ import { spawn } from "node:child_process";
 import { MARKETPLACE_NAME, PLUGIN_NAME } from "../cli";
 import { DaemonLifecycle } from "../daemon-lifecycle";
 import { StateDirResolver } from "../state-dir";
+import { ChannelRegistry, profileToEnv, setupChannelHome } from "../channel-profile";
+import { parseChannelFlag } from "./channel-args";
 
 /** Flags that AgentBridge owns and will inject automatically. */
 const OWNED_FLAGS = ["--channels", "--dangerously-load-development-channels"];
 
 export async function runClaude(args: string[]) {
-  // Check for owned flag conflicts
-  checkOwnedFlagConflicts(args, "agentbridge claude", OWNED_FLAGS);
+  // Parse & strip --channel, then validate owned flags BEFORE any side effect — so a rejected
+  // command never leaves a half-allocated channel behind (契约 5 integrity). Only once the
+  // command is known-valid do we allocate + apply the channel's 6 env, which the daemon launch
+  // + native claude spawn then inherit (PR3 hardens the daemon launch to carry it explicitly).
+  // No --channel = legacy path, behaviorally unchanged.
+  const { channelId, rest: nativeArgs } = parseChannelFlag(args);
+  checkOwnedFlagConflicts(nativeArgs, "agentbridge claude", OWNED_FLAGS);
+
+  if (channelId !== null) {
+    const profile = await new ChannelRegistry().allocate(channelId);
+    setupChannelHome(profile);
+    Object.assign(process.env, profileToEnv(profile));
+  }
 
   const stateDir = new StateDirResolver();
   const controlPort = parseInt(process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502", 10);
@@ -31,7 +44,7 @@ export async function runClaude(args: string[]) {
   // Once published to the official marketplace, switch to --channels.
   const fullArgs = [
     "--dangerously-load-development-channels", channelEntry,
-    ...args,
+    ...nativeArgs,
   ];
 
   const child = spawn("claude", fullArgs, {

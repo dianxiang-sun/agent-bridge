@@ -39,7 +39,15 @@ async function main() {
       break;
     case "kill":
       const { runKill } = await import("./cli/kill");
-      await runKill();
+      await runKill(restArgs);
+      break;
+    case "list":
+      const { runList } = await import("./cli/list");
+      await runList(restArgs);
+      break;
+    case "channel":
+      const { runChannel } = await import("./cli/channel");
+      await runChannel(restArgs);
       break;
     case "--help":
     case "-h":
@@ -71,6 +79,12 @@ Commands:
   claude [args...]  Start Claude Code with push channel enabled
   codex [args...]   Start Codex TUI connected to AgentBridge daemon
   kill              Force kill all AgentBridge processes
+  list [--json]     List named channels
+  channel create <id>   Create a named channel
+
+Multi-channel:
+  Add --channel <id> to claude/codex/kill to run an isolated channel
+  (independent ports + state + CODEX_HOME). No --channel = default (legacy).
 
 Options:
   --help, -h        Show this help message

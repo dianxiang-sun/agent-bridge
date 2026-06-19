@@ -2,6 +2,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, constants } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { StateDirResolver } from "./state-dir";
+import { assertChannelEnvConsistent } from "./channel-profile";
 
 // Resolve daemon entry across deployment contexts:
 // - Plugin bundle: bridge-server.js sibling -> ./daemon.js
@@ -36,6 +37,13 @@ export interface DaemonLifecycleOptions {
   stateDir: StateDirResolver;
   controlPort: number;
   log: (msg: string) => void;
+  /**
+   * Channel profile env (the 6 keys from profileToEnv) to bind EXPLICITLY onto the
+   * daemon spawn, instead of relying on process.env inheritance (design §2 '靠继承会丢').
+   * The lifecycle's own controlPort/stateDir always win over channelEnv. Omitted for
+   * the legacy `default` channel (then launch() behaves exactly as before).
+   */
+  channelEnv?: Record<string, string>;
 }
 
 /**
@@ -46,11 +54,17 @@ export class DaemonLifecycle {
   private readonly stateDir: StateDirResolver;
   private readonly controlPort: number;
   private readonly log: (msg: string) => void;
+  private readonly channelEnv: Record<string, string>;
 
   constructor(opts: DaemonLifecycleOptions) {
     this.stateDir = opts.stateDir;
     this.controlPort = opts.controlPort;
     this.log = opts.log;
+    this.channelEnv = opts.channelEnv ?? {};
+    assertChannelEnvConsistent(this.channelEnv, {
+      AGENTBRIDGE_CONTROL_PORT: String(this.controlPort),
+      AGENTBRIDGE_STATE_DIR: this.stateDir.dir,
+    }, "DaemonLifecycle");
   }
 
   get healthUrl(): string {
@@ -220,8 +234,12 @@ export class DaemonLifecycle {
 
     const daemonProc = spawn(process.execPath, ["run", DAEMON_PATH], {
       cwd: process.cwd(),
+      // Bind the channel profile env EXPLICITLY (design §2): channelEnv carries
+      // CODEX_WS_PORT/CODEX_PROXY_PORT/CODEX_HOME/CHANNEL_ID; the lifecycle's own
+      // controlPort/stateDir are written last so they always win over channelEnv.
       env: {
         ...process.env,
+        ...this.channelEnv,
         AGENTBRIDGE_CONTROL_PORT: String(this.controlPort),
         AGENTBRIDGE_STATE_DIR: this.stateDir.dir,
       },

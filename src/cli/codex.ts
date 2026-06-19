@@ -4,24 +4,32 @@ import { StateDirResolver } from "../state-dir";
 import { ConfigService } from "../config-service";
 import { DaemonLifecycle } from "../daemon-lifecycle";
 import { checkOwnedFlagConflicts } from "./claude";
+import { resolveCodexChannel } from "./channel-args";
 
 /** Flags that AgentBridge owns for codex command. */
 const OWNED_FLAGS = ["--remote"];
 
 export async function runCodex(args: string[]) {
+  // Resolve & strip --channel first. Read-only for codex (契约 5: never implicitly allocate —
+  // a missing named channel throws). A named channel applies its 6 env so the daemon launch +
+  // native codex spawn inherit the full triple. No --channel = legacy path, unchanged.
+  const resolved = resolveCodexChannel(args);
+  if (resolved.env) Object.assign(process.env, resolved.env);
+  const nativeArgs = resolved.nativeArgs;
+
   // Check for owned flag conflicts
-  checkOwnedFlagConflicts(args, "agentbridge codex", OWNED_FLAGS);
+  checkOwnedFlagConflicts(nativeArgs, "agentbridge codex", OWNED_FLAGS);
 
   // Specifically check for --enable tui_app_server (not all --enable values)
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--enable" && args[i + 1] === "tui_app_server") {
+  for (let i = 0; i < nativeArgs.length; i++) {
+    if (nativeArgs[i] === "--enable" && nativeArgs[i + 1] === "tui_app_server") {
       console.error(`Error: "--enable tui_app_server" is automatically set by agentbridge codex.`);
       console.error("");
       console.error("If you need full control over these flags, use the native command directly:");
       console.error("  codex [your flags here]");
       process.exit(1);
     }
-    if (args[i] === "--enable=tui_app_server") {
+    if (nativeArgs[i] === "--enable=tui_app_server") {
       console.error(`Error: "--enable=tui_app_server" is automatically set by agentbridge codex.`);
       console.error("");
       console.error("If you need full control over these flags, use the native command directly:");
@@ -39,6 +47,9 @@ export async function runCodex(args: string[]) {
     stateDir,
     controlPort,
     log: (msg) => console.error(`[agentbridge] ${msg}`),
+    // PR3: bind the resolved channel profile env explicitly onto the daemon spawn
+    // (named channel = 6 env; default = null → undefined → legacy inheritance, design §2).
+    channelEnv: resolved.env ?? undefined,
   });
 
   // Ensure daemon is running
@@ -53,14 +64,19 @@ export async function runCodex(args: string[]) {
     process.exit(1);
   }
 
-  // Read proxyUrl from daemon status or fall back to config
+  // Resolve proxyUrl. A named channel uses its own profile proxy port — NEVER the config
+  // fallback (契约 5). Default keeps the existing status-then-config behavior.
   let proxyUrl: string;
-  const status = lifecycle.readStatus();
-  if (status?.proxyUrl) {
-    proxyUrl = status.proxyUrl;
+  if (resolved.proxyUrl) {
+    proxyUrl = resolved.proxyUrl;
   } else {
-    proxyUrl = `ws://127.0.0.1:${config.codex.proxyPort}`;
-    console.error(`[agentbridge] No daemon status found, using config default: ${proxyUrl}`);
+    const status = lifecycle.readStatus();
+    if (status?.proxyUrl) {
+      proxyUrl = status.proxyUrl;
+    } else {
+      proxyUrl = `ws://127.0.0.1:${config.codex.proxyPort}`;
+      console.error(`[agentbridge] No daemon status found, using config default: ${proxyUrl}`);
+    }
   }
 
   try {
@@ -126,7 +142,7 @@ export async function runCodex(args: string[]) {
   const fullArgs = [
     "--enable", "tui_app_server",
     "--remote", proxyUrl,
-    ...args,
+    ...nativeArgs,
   ];
 
   const child = spawn("codex", fullArgs, {

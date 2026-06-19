@@ -14,6 +14,7 @@ import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
 import { appendFileSync } from "node:fs";
 import { StateDirResolver } from "./state-dir";
+import { assertChannelEnvConsistent } from "./channel-profile";
 import type { BridgeMessage } from "./types";
 import type { ServerWebSocket } from "bun";
 import {
@@ -90,6 +91,7 @@ export class CodexAdapter extends EventEmitter {
   private appPort: number;
   private proxyPort: number;
   private readonly logFile: string;
+  private readonly channelEnv: Record<string, string>;
   private readonly drainTimeoutMs: number;
   private tuiConnId = 0; // tracks which TUI connection is "current" (primary)
   private connIdCounter = 0; // monotonically increasing counter for unique conn IDs
@@ -122,11 +124,21 @@ export class CodexAdapter extends EventEmitter {
   // Generation counter to prevent stale app-server close handlers from interfering
   private appServerGeneration = 0;
 
-  constructor(appPort = 4500, proxyPort = 4501, logFile = new StateDirResolver().logFile) {
+  constructor(
+    appPort = 4500,
+    proxyPort = 4501,
+    logFile = new StateDirResolver().logFile,
+    options: { channelEnv?: Record<string, string> } = {},
+  ) {
     super();
     this.appPort = appPort;
     this.proxyPort = proxyPort;
     this.logFile = logFile;
+    this.channelEnv = options.channelEnv ?? {};
+    assertChannelEnvConsistent(this.channelEnv, {
+      CODEX_WS_PORT: String(appPort),
+      CODEX_PROXY_PORT: String(proxyPort),
+    }, "CodexAdapter");
     this.drainTimeoutMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS)
       ?? DEFAULT_DRAIN_TIMEOUT_MS;
   }
@@ -137,12 +149,20 @@ export class CodexAdapter extends EventEmitter {
 
   // ── Lifecycle ──────────────────────────────────────────────
 
+  /** Build codex app-server spawn env: merge the channel profile env over
+   *  process.env (NEVER replace — PATH/HOME/auth must survive), binding
+   *  CODEX_HOME / ports explicitly instead of relying on inheritance (design §2). */
+  private buildSpawnEnv(): NodeJS.ProcessEnv {
+    return { ...process.env, ...this.channelEnv };
+  }
+
   async start() {
     this.intentionalDisconnect = false;
     await this.checkPorts();
     this.log(`Spawning codex app-server on ${this.appServerUrl}`);
     this.proc = spawn("codex", ["app-server", "--listen", this.appServerUrl], {
       stdio: ["pipe", "pipe", "pipe"],
+      env: this.buildSpawnEnv(),
     });
 
     this.proc.on("error", (err) => this.emit("error", err));

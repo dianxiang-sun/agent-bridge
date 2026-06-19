@@ -4,6 +4,7 @@ import { appendFileSync } from "node:fs";
 import { ClaudeAdapter } from "./claude-adapter";
 import { DaemonClient } from "./daemon-client";
 import { DaemonLifecycle } from "./daemon-lifecycle";
+import { channelEnvFromProcessEnv } from "./channel-profile";
 import { StateDirResolver } from "./state-dir";
 import { ConfigService } from "./config-service";
 import { disabledReplyError, type BridgeDisabledReason } from "./bridge-disabled-state";
@@ -16,7 +17,14 @@ const configService = new ConfigService();
 const config = configService.loadOrDefault();
 
 const CONTROL_PORT = parseInt(process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502", 10);
-const daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
+// PR3: extract the named channel profile env from our own process.env (plugin/claude
+// injected it) and bind it explicitly onto the daemon spawn. default → undefined → legacy.
+const daemonLifecycle = new DaemonLifecycle({
+  stateDir,
+  controlPort: CONTROL_PORT,
+  log,
+  channelEnv: channelEnvFromProcessEnv(),
+});
 const CONTROL_WS_URL = daemonLifecycle.controlWsUrl;
 
 const claude = new ClaudeAdapter(stateDir.logFile);
