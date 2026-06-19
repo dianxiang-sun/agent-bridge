@@ -448,3 +448,12 @@ export function assertChannelEnvConsistent(
     }
   }
 }
+
+/**
+ * Human-facing message prefix for a channel (PR4 Task 4.2). The legacy `default`
+ * channel gets an EMPTY prefix so ready/waiting text stays byte-identical to pre-PR4
+ * (零回归); named channels are tagged so users can tell concurrent channels apart.
+ */
+export function channelMessagePrefix(channelId: string): string {
+  return channelId === "default" ? "" : `[channel ${channelId}] `;
+}

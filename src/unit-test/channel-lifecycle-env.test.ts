@@ -5,9 +5,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { channelEnvFromProcessEnv } from "../channel-profile";
+import { channelEnvFromProcessEnv, channelMessagePrefix } from "../channel-profile";
 import { DaemonLifecycle } from "../daemon-lifecycle";
-import { CodexAdapter } from "../codex-adapter";
+import { CodexAdapter, decidePortAction } from "../codex-adapter";
 import { StateDirResolver } from "../state-dir";
 
 // PR3 — daemon-lifecycle / codex-adapter must spawn with the channel profile env
@@ -267,5 +267,42 @@ describe("PR3 split-brain guard (red-team path 1: channelEnv conflicts with cons
     expect(() => new CodexAdapter(4510, 4511, "/tmp/x.log", {
       channelEnv: { CODEX_WS_PORT: "4510", CODEX_PROXY_PORT: "4511", CODEX_HOME: "/h/A" },
     })).not.toThrow();
+  });
+});
+
+describe("channelMessagePrefix (Task 4.2 — default 零回归)", () => {
+  test("default → empty prefix (ready/waiting text byte-identical to pre-PR4)", () => {
+    expect(channelMessagePrefix("default")).toBe("");
+  });
+  test("named → tagged prefix", () => {
+    expect(channelMessagePrefix("A")).toBe("[channel A] ");
+  });
+});
+
+describe("decidePortAction (Task 4.4 契约8 — checkPorts channel-scoped)", () => {
+  const codexBase = { occupantIsCodexAppServer: true, recordedAppServerPid: 123, isDefault: false };
+  test("free port → free", () => {
+    expect(decidePortAction({ role: "app", occupantPid: null, occupantIsCodexAppServer: false, recordedAppServerPid: null, isDefault: false })).toBe("free");
+  });
+  test("proxy port occupied → block (proxy 是 daemon 自己的 server，绝不杀)", () => {
+    expect(decidePortAction({ ...codexBase, role: "proxy", occupantPid: 123 })).toBe("block");
+  });
+  test("app named: occupant == recorded codex app-server → kill", () => {
+    expect(decidePortAction({ ...codexBase, role: "app", occupantPid: 123 })).toBe("kill");
+  });
+  test("app named: occupant != recorded → block (不跨通道泛杀邻居)", () => {
+    expect(decidePortAction({ ...codexBase, role: "app", occupantPid: 999 })).toBe("block");
+  });
+  test("app named: no recorded pid → block (named 绝不 fallback broad-kill)", () => {
+    expect(decidePortAction({ ...codexBase, role: "app", occupantPid: 123, recordedAppServerPid: null })).toBe("block");
+  });
+  test("app default: no recorded pid + codex app-server → kill (legacy cleanup 零回归)", () => {
+    expect(decidePortAction({ role: "app", occupantPid: 123, occupantIsCodexAppServer: true, recordedAppServerPid: null, isDefault: true })).toBe("kill");
+  });
+  test("app default: recorded but DIFFERENT codex app-server pid → kill (字面零回归 broad-cleanup,无视 recorded)", () => {
+    expect(decidePortAction({ role: "app", occupantPid: 999, occupantIsCodexAppServer: true, recordedAppServerPid: 123, isDefault: true })).toBe("kill");
+  });
+  test("app: foreign (non-codex) process → block", () => {
+    expect(decidePortAction({ role: "app", occupantPid: 123, occupantIsCodexAppServer: false, recordedAppServerPid: null, isDefault: true })).toBe("block");
   });
 });

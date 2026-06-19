@@ -157,6 +157,8 @@ async function connectToDaemon(isReconnect = false) {
 
   try {
     await daemonLifecycle.ensureRunning();
+    // PR4 契约1: verify channel identity before attaching (named only; default skips).
+    await daemonLifecycle.verifyChannelIdentity(isReconnect ? "reconnect" : "attach");
     await daemonClient.connect();
     daemonClient.attachClaude();
     daemonDisabledReason = null;
@@ -292,6 +294,7 @@ async function pollDisabledRecovery() {
 
     log("Disabled-state recovery conditions met — attempting direct daemon reconnect");
     try {
+      await daemonLifecycle.verifyChannelIdentity("reconnect");
       await daemonClient.connect();
       daemonClient.attachClaude();
       daemonDisabled = false;

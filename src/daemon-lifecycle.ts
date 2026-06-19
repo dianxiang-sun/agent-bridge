@@ -133,6 +133,41 @@ export class DaemonLifecycle {
     }
   }
 
+  /**
+   * Verify the live daemon's identity before an attach/reconnect/kill op (PR4 契约1).
+   * A NAMED channel fetches /healthz and requires {channelId, controlPort} (and pid, if
+   * given) to match this profile — refusing prevents `kill B` from hitting A through a
+   * corrupt state dir, or attaching to the wrong daemon. The legacy `default` channel has
+   * no registry profile and may use a legacy manual control port, so it SKIPS the hard
+   * check (零回归). Throws on mismatch / unreachable; callers decide refuse vs abort.
+   */
+  async verifyChannelIdentity(
+    context: "attach" | "reconnect" | "kill",
+    expectedPid?: number,
+  ): Promise<void> {
+    const expectedChannelId = this.channelEnv.AGENTBRIDGE_CHANNEL_ID;
+    if (!expectedChannelId || expectedChannelId === "default") return; // default: skip hard identity
+    let health: { channelId?: string; controlPort?: number; pid?: number };
+    try {
+      const res = await fetch(this.healthUrl);
+      health = (await res.json()) as { channelId?: string; controlPort?: number; pid?: number };
+    } catch (err: any) {
+      throw new Error(
+        `[${context}] channel '${expectedChannelId}' identity check failed: daemon unreachable on ${this.healthUrl}: ${err.message}`,
+      );
+    }
+    if (health.channelId !== expectedChannelId || health.controlPort !== this.controlPort) {
+      throw new Error(
+        `[${context}] channel identity mismatch: expected {channelId:'${expectedChannelId}',controlPort:${this.controlPort}} but daemon reports {channelId:'${health.channelId}',controlPort:${health.controlPort}} — refusing to proceed`,
+      );
+    }
+    if (expectedPid !== undefined && health.pid !== expectedPid) {
+      throw new Error(
+        `[${context}] channel identity pid mismatch: expected pid ${expectedPid} but daemon /healthz reports pid ${health.pid} — refusing`,
+      );
+    }
+  }
+
   /** Wait for daemon to become healthy. */
   async waitForHealthy(maxRetries = 40, delayMs = 250): Promise<void> {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -325,6 +360,16 @@ export class DaemonLifecycle {
     if (!this.isDaemonProcess(pid)) {
       this.log(`Pid ${pid} is alive but is NOT an AgentBridge daemon — refusing to kill. Cleaning up stale pid file.`);
       this.cleanup();
+      return false;
+    }
+
+    // Channel identity gate (PR4 契约1): for a named channel, refuse to kill unless the
+    // live daemon's /healthz reports the matching channelId/controlPort/pid — prevents
+    // `kill B` from hitting A through a corrupt state dir. default skips (零回归).
+    try {
+      await this.verifyChannelIdentity("kill", pid);
+    } catch (err: any) {
+      this.log(err.message);
       return false;
     }
 

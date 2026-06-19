@@ -9,6 +9,13 @@ export interface DaemonStatus {
   proxyUrl: string;
   appServerUrl: string;
   pid: number;
+  /** Channel identity (PR4 契约1). "default" for the legacy channel. */
+  channelId: string;
+  controlPort: number;
+  /** Recorded codex app-server pid for channel-scoped checkPorts (PR4 契约8). */
+  codexAppServerPid?: number | null;
+  /** Set when a port was occupied and NOT reclaimed (PR4 契约8); surfaced in PR5 list. */
+  blockedPort?: { port: number; role: string; message: string } | null;
 }
 
 export type AskCodexOutcome =
