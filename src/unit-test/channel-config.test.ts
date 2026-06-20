@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parse } from "smol-toml";
-import { generateChannelConfig } from "../channel-config";
+import { generateChannelConfig, withProjectTrust } from "../channel-config";
 
 describe("generateChannelConfig (契约2)", () => {
   const ROOT = "/Users/ds/.codex";
@@ -41,5 +41,39 @@ describe("generateChannelConfig (契约2)", () => {
   test("rootCodexHome 精确匹配(非后代)也重写", () => {
     const out = generateChannelConfig(`CODEX_HOME = "${ROOT}"\n`, ROOT, CH);
     expect((parse(out) as any).CODEX_HOME).toBe(CH);
+  });
+});
+
+describe("withProjectTrust (codex project trust upsert)", () => {
+  test("新目录 → 加 [projects.<dir>].trust_level=trusted,其他配置保留", () => {
+    const out = withProjectTrust(`model = "gpt-5"\n`, "/Users/ds/proj/foo");
+    const o: any = parse(out);
+    expect(o.projects["/Users/ds/proj/foo"].trust_level).toBe("trusted");
+    expect(o.model).toBe("gpt-5");
+  });
+
+  test("已有目录(untrusted) → upsert 成 trusted,不重复 table", () => {
+    const src = [`[projects."/Users/ds/a"]`, `trust_level = "untrusted"`].join("\n");
+    const out = withProjectTrust(src, "/Users/ds/a");
+    const o: any = parse(out); // parse 成功即证明无 duplicate table(重复会抛)
+    expect(o.projects["/Users/ds/a"].trust_level).toBe("trusted");
+    expect(out.split(`projects."/Users/ds/a"`).length - 1).toBe(1); // 只出现一次
+  });
+
+  test("保留其他 [projects.*] 不动 + 幂等(重复调用结果不变)", () => {
+    const src = [`[projects."/other"]`, `trust_level = "trusted"`].join("\n");
+    const once = withProjectTrust(src, "/Users/ds/new");
+    const twice = withProjectTrust(once, "/Users/ds/new");
+    const o: any = parse(twice);
+    expect(o.projects["/other"].trust_level).toBe("trusted");
+    expect(o.projects["/Users/ds/new"].trust_level).toBe("trusted");
+    expect(twice).toBe(once); // 幂等:第二次无变化
+  });
+
+  test("路径含空格/特殊字符 → 正确转义可 round-trip", () => {
+    const dir = "/Users/ds/my proj";
+    const out = withProjectTrust(``, dir);
+    const o: any = parse(out); // 不抛 = smol-toml 转义正确
+    expect(o.projects[dir].trust_level).toBe("trusted");
   });
 });

@@ -48,3 +48,21 @@ function rewriteValue(value: string, root: string, rootPrefix: string, channelHo
   }
   return value; // non-home path or unrelated string — preserve
 }
+
+/**
+ * Idempotently upsert a project-trust entry into a codex `config.toml` (smol-toml round-trip:
+ * no duplicate tables, the path key is auto-escaped). Used by `agentbridge channel trust <id>
+ * <dir>` to pre-trust a workspace in a named channel's ISOLATED config so codex won't prompt
+ * "Project-local config ... disabled until the project is trusted" on a fresh CODEX_HOME.
+ */
+export function withProjectTrust(configText: string, projectDir: string, level = "trusted"): string {
+  const ast = parse(configText) as Record<string, unknown>;
+  const projects: Record<string, unknown> =
+    ast.projects && typeof ast.projects === "object" ? (ast.projects as Record<string, unknown>) : {};
+  const prev = (projects[projectDir] && typeof projects[projectDir] === "object")
+    ? (projects[projectDir] as Record<string, unknown>)
+    : {};
+  projects[projectDir] = { ...prev, trust_level: level };
+  ast.projects = projects;
+  return stringify(ast as any);
+}

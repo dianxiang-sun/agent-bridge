@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, realpathSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,8 +9,9 @@ import {
   resolveKillScope,
 } from "../cli/channel-args";
 import { profileToEnv, ChannelRegistry } from "../channel-profile";
+import { parse } from "smol-toml";
 import { buildChannelList, buildChannelStatusList } from "../cli/list";
-import { createChannel } from "../cli/channel";
+import { createChannel, trustChannelDir } from "../cli/channel";
 import { runGc, shouldGc } from "../cli/gc";
 
 describe("parseChannelFlag (剥离 --channel,不透传)", () => {
@@ -286,5 +287,46 @@ describe("gc + remove (registry-only,绝不删 codexHome)", () => {
     expect(reg.read("stop")).not.toBeNull();    // stopped 保留(profile 可复用)
     expect(reg.read("dead")).toBeNull();         // stale-dead 清掉 registry entry
     expect(existsSync(join(dead.codexHome, "data.sqlite"))).toBe(true); // 数据保留(registry-only)
+  });
+});
+
+describe("trustChannelDir (channel trust <id> <dir> → codex project trust)", () => {
+  test("写 project trust(canonical 绝对路径)进通道隔离 config,保留其他配置", async () => {
+    const root = mkdtempSync(join(tmpdir(), "abg-trust-"));
+    const projDir = mkdtempSync(join(tmpdir(), "abg-proj-")); // 真实存在的工作目录
+    const profile = await new ChannelRegistry(root).allocate("T");
+    mkdirSync(profile.codexHome, { recursive: true });
+    writeFileSync(join(profile.codexHome, "config.toml"), `model = "x"\n`);
+    const cfgPath = await trustChannelDir("T", projDir, root);
+    const cfg: any = parse(readFileSync(cfgPath, "utf-8"));
+    expect(cfg.projects[realpathSync(projDir)].trust_level).toBe("trusted"); // canonical 绝对 key
+    expect(cfg.model).toBe("x");
+    rmSync(root, { recursive: true, force: true });
+    rmSync(projDir, { recursive: true, force: true });
+  });
+
+  test("通道 config 缺失(fresh CODEX_HOME)→ 创建 config 写 trust(无人值守不失败)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "abg-trust3-"));
+    const projDir = mkdtempSync(join(tmpdir(), "abg-proj3-"));
+    await new ChannelRegistry(root).allocate("T");
+    // 故意不建 codexHome / 不写 config(模拟 fresh home)
+    const cfgPath = await trustChannelDir("T", projDir, root);
+    const cfg: any = parse(readFileSync(cfgPath, "utf-8"));
+    expect(cfg.projects[realpathSync(projDir)].trust_level).toBe("trusted");
+    rmSync(root, { recursive: true, force: true });
+    rmSync(projDir, { recursive: true, force: true });
+  });
+
+  test("不存在的 dir → throw(防 relative './x' / 不存在的假绿)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "abg-trust4-"));
+    await new ChannelRegistry(root).allocate("T");
+    await expect(trustChannelDir("T", "/no/such/dir/xyz123", root)).rejects.toThrow(/does not exist/i);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("未创建的通道 → 报错提示先 create", async () => {
+    const root = mkdtempSync(join(tmpdir(), "abg-trust2-"));
+    await expect(trustChannelDir("ghost", "/x", root)).rejects.toThrow(/not created|create/i);
+    rmSync(root, { recursive: true, force: true });
   });
 });
