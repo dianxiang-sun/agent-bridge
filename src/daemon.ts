@@ -2,7 +2,7 @@
 
 import { appendFileSync } from "node:fs";
 import type { ServerWebSocket } from "bun";
-import { CodexAdapter } from "./codex-adapter";
+import { CodexAdapter, BlockedPortError } from "./codex-adapter";
 import {
   BRIDGE_CONTRACT_REMINDER,
   REPLY_REQUIRED_INSTRUCTION,
@@ -12,6 +12,7 @@ import {
 } from "./message-filter";
 import { TuiConnectionState } from "./tui-connection-state";
 import { DaemonLifecycle } from "./daemon-lifecycle";
+import { channelEnvFromProcessEnv, channelMessagePrefix } from "./channel-profile";
 import { StateDirResolver } from "./state-dir";
 import { ConfigService } from "./config-service";
 import { CLOSE_CODE_REPLACED } from "./control-protocol";
@@ -50,6 +51,8 @@ const config = configService.loadOrDefault();
 const CODEX_APP_PORT = parseInt(process.env.CODEX_WS_PORT ?? String(config.codex.appPort), 10);
 const CODEX_PROXY_PORT = parseInt(process.env.CODEX_PROXY_PORT ?? String(config.codex.proxyPort), 10);
 const CONTROL_PORT = parseInt(process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502", 10);
+const CHANNEL_ID = process.env.AGENTBRIDGE_CHANNEL_ID ?? "default";
+const CHANNEL_TAG = channelMessagePrefix(CHANNEL_ID);
 const TUI_DISCONNECT_GRACE_MS = parseInt(process.env.TUI_DISCONNECT_GRACE_MS ?? "2500", 10);
 const CLAUDE_DISCONNECT_GRACE_MS = 5_000;
 const MAX_BUFFERED_MESSAGES = parseInt(process.env.AGENTBRIDGE_MAX_BUFFERED_MESSAGES ?? "100", 10);
@@ -61,7 +64,21 @@ const PROTOCOL_VERSION = 1;
 
 const daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
 
-const codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile);
+// PR3: bind the channel profile env explicitly onto the codex app-server spawn
+// (design §2 — CODEX_HOME is the only real isolation). default → undefined → legacy.
+// PR4 契约8: record the app-server pid (written into status.json on spawn) so checkPorts
+// kills only THIS channel's recorded pid; track a blocked port for status/list.
+let codexAppServerPid: number | null = null;
+let blockedPort: { port: number; role: string; message: string } | null = null;
+const codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile, {
+  channelEnv: channelEnvFromProcessEnv(),
+  statusFile: stateDir.statusFile,
+  channelId: CHANNEL_ID,
+  onAppServerSpawned: (pid) => {
+    codexAppServerPid = pid;
+    writeStatusFile();
+  },
+});
 const attachCmd = `codex --enable tui_app_server --remote ${codex.proxyUrl}`;
 
 let controlServer: ReturnType<typeof Bun.serve> | null = null;
@@ -845,15 +862,19 @@ function currentStatus(): DaemonStatus {
     proxyUrl: codex.proxyUrl,
     appServerUrl: codex.appServerUrl,
     pid: process.pid,
+    channelId: CHANNEL_ID,
+    controlPort: CONTROL_PORT,
+    codexAppServerPid,
+    blockedPort,
   };
 }
 
 function currentWaitingMessage() {
-  return `⏳ Waiting for Codex TUI to connect. Run in another terminal:\n${attachCmd}`;
+  return `${CHANNEL_TAG}⏳ Waiting for Codex TUI to connect. Run in another terminal:\n${attachCmd}`;
 }
 
 function currentReadyMessage() {
-  return `✅ Codex TUI connected (${codex.activeThreadId}). Bridge ready.`;
+  return `${CHANNEL_TAG}✅ Codex TUI connected (${codex.activeThreadId}). Bridge ready.`;
 }
 
 function notifyCodexClaudeOnline() {
@@ -885,10 +906,13 @@ function removePidFile() {
 
 function writeStatusFile() {
   daemonLifecycle.writeStatus({
+    channelId: CHANNEL_ID,
     proxyUrl: codex.proxyUrl,
     appServerUrl: codex.appServerUrl,
     controlPort: CONTROL_PORT,
     pid: process.pid,
+    codexAppServerPid,
+    blockedPort,
   });
 }
 
@@ -911,6 +935,12 @@ async function bootCodex() {
     broadcastStatus();
   } catch (err: any) {
     log(`Failed to start Codex: ${err.message}`);
+    // PR4 契约8: a blocked port is recorded in status.json (for PR5 `list`) + broadcast,
+    // not just logged — so the user/list sees "blocked-port" instead of a silent failure.
+    if (err instanceof BlockedPortError) {
+      blockedPort = { port: err.port, role: err.portRole, message: err.message };
+      writeStatusFile();
+    }
     emitToClaude(
       systemMessage(
         "system_codex_start_failed",
@@ -936,7 +966,7 @@ function shutdown(reason: string) {
 }
 
 function log(msg: string) {
-  const line = `[${new Date().toISOString()}] [AgentBridgeDaemon] ${msg}\n`;
+  const line = `[${new Date().toISOString()}] [AgentBridgeDaemon][channel:${CHANNEL_ID}] ${msg}\n`;
   process.stderr.write(line);
   try {
     appendFileSync(stateDir.logFile, line);

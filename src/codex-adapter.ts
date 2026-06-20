@@ -12,8 +12,9 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { StateDirResolver } from "./state-dir";
+import { assertChannelEnvConsistent } from "./channel-profile";
 import type { BridgeMessage } from "./types";
 import type { ServerWebSocket } from "bun";
 import {
@@ -76,6 +77,45 @@ function formatDrainTimeoutWarning(entryCount: number): string {
   return DRAIN_TIMEOUT_WARNING_TEMPLATE.replace("N", String(entryCount));
 }
 
+export type PortRole = "app" | "proxy";
+export type PortAction = "free" | "kill" | "block";
+
+/** Channel-scoped port decision (PR4 契约8). The proxy port hosts the daemon's own
+ *  server (not a codex child) → never kill. App port: a NAMED channel kills ONLY the
+ *  recorded codex app-server pid (never a neighbor); the legacy `default` channel
+ *  broad-cleans ANY codex app-server regardless of recorded pid (字面零回归 = pre-PR4). */
+export function decidePortAction(opts: {
+  role: PortRole;
+  occupantPid: number | null;
+  occupantIsCodexAppServer: boolean;
+  recordedAppServerPid: number | null;
+  isDefault: boolean;
+}): PortAction {
+  if (opts.occupantPid === null) return "free";
+  if (opts.role === "proxy") return "block";
+  if (!opts.occupantIsCodexAppServer) return "block";
+  // default: legacy broad-cleanup of ANY codex app-server on the app port (字面零回归 —
+  // pre-PR4 behavior never consulted a recorded pid). recorded pid is irrelevant here.
+  if (opts.isDefault) return "kill";
+  // named: kill ONLY the recorded pid; never fallback-kill a neighbor channel's server.
+  if (opts.recordedAppServerPid !== null) {
+    return opts.occupantPid === opts.recordedAppServerPid ? "kill" : "block";
+  }
+  return "block";
+}
+
+/** Thrown by checkPorts when a port is occupied and must NOT be force-reclaimed. */
+export class BlockedPortError extends Error {
+  constructor(
+    public readonly port: number,
+    public readonly portRole: PortRole,
+    message: string,
+  ) {
+    super(message);
+    this.name = "BlockedPortError";
+  }
+}
+
 export class CodexAdapter extends EventEmitter {
   private static readonly RESPONSE_TRACKING_TTL_MS = 30000;
 
@@ -90,6 +130,10 @@ export class CodexAdapter extends EventEmitter {
   private appPort: number;
   private proxyPort: number;
   private readonly logFile: string;
+  private readonly channelEnv: Record<string, string>;
+  private readonly statusFile: string | null;
+  private readonly channelId: string;
+  private readonly onAppServerSpawned: ((pid: number) => void) | null;
   private readonly drainTimeoutMs: number;
   private tuiConnId = 0; // tracks which TUI connection is "current" (primary)
   private connIdCounter = 0; // monotonically increasing counter for unique conn IDs
@@ -122,11 +166,29 @@ export class CodexAdapter extends EventEmitter {
   // Generation counter to prevent stale app-server close handlers from interfering
   private appServerGeneration = 0;
 
-  constructor(appPort = 4500, proxyPort = 4501, logFile = new StateDirResolver().logFile) {
+  constructor(
+    appPort = 4500,
+    proxyPort = 4501,
+    logFile = new StateDirResolver().logFile,
+    options: {
+      channelEnv?: Record<string, string>;
+      statusFile?: string;
+      channelId?: string;
+      onAppServerSpawned?: (pid: number) => void;
+    } = {},
+  ) {
     super();
     this.appPort = appPort;
     this.proxyPort = proxyPort;
     this.logFile = logFile;
+    this.channelEnv = options.channelEnv ?? {};
+    this.statusFile = options.statusFile ?? null;
+    this.channelId = options.channelId ?? process.env.AGENTBRIDGE_CHANNEL_ID ?? "default";
+    this.onAppServerSpawned = options.onAppServerSpawned ?? null;
+    assertChannelEnvConsistent(this.channelEnv, {
+      CODEX_WS_PORT: String(appPort),
+      CODEX_PROXY_PORT: String(proxyPort),
+    }, "CodexAdapter");
     this.drainTimeoutMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS)
       ?? DEFAULT_DRAIN_TIMEOUT_MS;
   }
@@ -137,13 +199,25 @@ export class CodexAdapter extends EventEmitter {
 
   // ── Lifecycle ──────────────────────────────────────────────
 
+  /** Build codex app-server spawn env: merge the channel profile env over
+   *  process.env (NEVER replace — PATH/HOME/auth must survive), binding
+   *  CODEX_HOME / ports explicitly instead of relying on inheritance (design §2). */
+  private buildSpawnEnv(): NodeJS.ProcessEnv {
+    return { ...process.env, ...this.channelEnv };
+  }
+
   async start() {
     this.intentionalDisconnect = false;
     await this.checkPorts();
     this.log(`Spawning codex app-server on ${this.appServerUrl}`);
     this.proc = spawn("codex", ["app-server", "--listen", this.appServerUrl], {
       stdio: ["pipe", "pipe", "pipe"],
+      env: this.buildSpawnEnv(),
     });
+
+    // Record the app-server pid IMMEDIATELY (PR4 契约8) — before health checks — so a
+    // crash mid-start still leaves a recorded pid for the next checkPorts to clean up.
+    if (typeof this.proc.pid === "number") this.onAppServerSpawned?.(this.proc.pid);
 
     this.proc.on("error", (err) => this.emit("error", err));
     this.proc.on("exit", (code) => this.emit("exit", code));
@@ -1232,63 +1306,66 @@ export class CodexAdapter extends EventEmitter {
    * Only kills `codex app-server` processes (our own spawns). If the port is
    * occupied by something else, throws with a clear message.
    */
+  /** Read the recorded codex app-server pid from this channel's status.json (PR4 契约8). */
+  private readRecordedAppServerPid(): number | null {
+    if (!this.statusFile) return null;
+    try {
+      const raw = JSON.parse(readFileSync(this.statusFile, "utf-8")) as { codexAppServerPid?: unknown };
+      const pid = raw?.codexAppServerPid;
+      return typeof pid === "number" && Number.isFinite(pid) ? pid : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Channel-scoped port cleanup before spawning (PR4 契约8). A NAMED channel kills ONLY
+   * the recorded codex app-server pid (never a neighbor); the legacy `default` channel
+   * broad-cleans any codex app-server on the app port (pre-PR4 behavior). proxy port is
+   * never killed. A port we must not reclaim throws BlockedPortError (bootCodex records it).
+   */
   private async checkPorts() {
-    for (const port of [this.appPort, this.proxyPort]) {
+    const isDefault = this.channelId === "default";
+    const recordedAppServerPid = this.readRecordedAppServerPid();
+    const portRoles: Array<[number, PortRole]> = [
+      [this.appPort, "app"],
+      [this.proxyPort, "proxy"],
+    ];
+    for (const [port, role] of portRoles) {
+      let occupantPids: number[] = [];
       try {
-        const pids = execSync(`lsof -ti :${port}`, { encoding: "utf-8" }).trim();
-        if (!pids) continue;
-
-        // Check if the occupying process is a codex app-server (our own stale spawn)
-        const pidList = pids.split("\n").map((p) => p.trim()).filter(Boolean);
-        const staleCodexPids: string[] = [];
-        const foreignPids: string[] = [];
-
-        for (const pid of pidList) {
-          try {
-            const cmdline = execSync(`ps -p ${pid} -o args=`, { encoding: "utf-8" }).trim();
-            if (cmdline.includes("codex") && cmdline.includes("app-server")) {
-              staleCodexPids.push(pid);
-            } else {
-              foreignPids.push(pid);
-            }
-          } catch {
-            // Process already gone
-          }
+        // Listener-only (Codex PR4 R2 blocker): plain `lsof -ti :port` also returns
+        // CLIENT pids (e.g. an attached TUI/proxy), which would be misjudged foreign and
+        // wrongly block — or survive a listener kill. -sTCP:LISTEN restricts to the listener.
+        const out = execSync(`lsof -tiTCP:${port} -sTCP:LISTEN`, { encoding: "utf-8" }).trim();
+        occupantPids = out
+          ? out.split("\n").map((p) => Number.parseInt(p.trim(), 10)).filter((n) => Number.isFinite(n))
+          : [];
+      } catch {
+        occupantPids = []; // lsof exit 1 → port free
+      }
+      for (const pid of occupantPids) {
+        let cmdline = "";
+        try {
+          cmdline = execSync(`ps -p ${pid} -o args=`, { encoding: "utf-8" }).trim();
+        } catch {
+          continue; // process vanished between lsof and ps
         }
-
-        // Kill stale codex app-server processes (our own previous spawns)
-        if (staleCodexPids.length > 0) {
-          this.log(`Cleaning up stale codex app-server on port ${port}: PID(s) ${staleCodexPids.join(", ")}`);
-          for (const pid of staleCodexPids) {
-            try { execSync(`kill ${pid}`, { encoding: "utf-8" }); } catch {}
-          }
+        const occupantIsCodexAppServer = cmdline.includes("codex") && cmdline.includes("app-server");
+        const action = decidePortAction({ role, occupantPid: pid, occupantIsCodexAppServer, recordedAppServerPid, isDefault });
+        if (action === "kill") {
+          this.log(`checkPorts: reclaiming ${role} port ${port} — killing recorded/stale codex app-server pid ${pid}`);
+          try { execSync(`kill ${pid}`, { encoding: "utf-8" }); } catch {}
           await new Promise((r) => setTimeout(r, 500));
-        }
-
-        // If foreign processes still occupy the port, fail with a clear message
-        if (foreignPids.length > 0) {
-          throw new Error(
-            `Port ${port} is already in use by non-Codex process(es): PID(s) ${foreignPids.join(", ")}. ` +
-            `Please stop the process or set a different port via ${port === this.appPort ? "CODEX_WS_PORT" : "CODEX_PROXY_PORT"} env var.`
+        } else if (action === "block") {
+          throw new BlockedPortError(
+            port,
+            role,
+            `Port ${port} (${role}) is occupied by pid ${pid} ` +
+              `(${occupantIsCodexAppServer ? `a codex app-server NOT owned by channel '${this.channelId}'` : "a foreign process"}); ` +
+              `refusing to kill. Stop it or use a different ${role === "app" ? "CODEX_WS_PORT" : "CODEX_PROXY_PORT"}.`,
           );
         }
-
-        // Verify port is now free
-        try {
-          const remaining = execSync(`lsof -ti :${port}`, { encoding: "utf-8" }).trim();
-          if (remaining) {
-            throw new Error(
-              `Port ${port} is still occupied (PID(s): ${remaining.replace(/\n/g, ", ")}) after cleanup. ` +
-              `Please stop the process or set a different port via ${port === this.appPort ? "CODEX_WS_PORT" : "CODEX_PROXY_PORT"} env var.`
-            );
-          }
-        } catch (err: any) {
-          if (err.message?.includes("Port")) throw err;
-          // lsof exit 1 = port free, good
-        }
-      } catch (err: any) {
-        // lsof returns exit code 1 if no match — port is free
-        if (err.message?.includes("Port") || err.message?.includes("non-Codex")) throw err;
       }
     }
   }
