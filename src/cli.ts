@@ -84,7 +84,8 @@ Commands:
   codex [args...]   Start Codex TUI connected to AgentBridge daemon
   kill              Force kill all AgentBridge processes
   list [--json]     List named channels
-  channel create <id>   Create a named channel
+  channel create <id>       Create a named channel
+  channel trust <id> <dir>  Trust a workspace dir in a channel (skip codex prompt)
 
 Multi-channel:
   Add --channel <id> to claude/codex/kill to run an isolated channel
