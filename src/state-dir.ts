@@ -46,6 +46,11 @@ export class StateDirResolver {
     return join(this.stateDir, "codex-tui.pid");
   }
 
+  /** Channel-scoped TUI identity record {pid,channelId,controlPort,proxyUrl} (supersedes the bare pid). */
+  get tuiMetaFile(): string {
+    return join(this.stateDir, "codex-tui.json");
+  }
+
   get lockFile(): string {
     return join(this.stateDir, "daemon.lock");
   }

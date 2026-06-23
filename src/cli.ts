@@ -8,7 +8,7 @@
  *   agentbridge dev         — Register local marketplace + install plugin for local dev
  *   agentbridge claude      — Start Claude Code with push channel flags
  *   agentbridge codex       — Start Codex TUI connected to daemon
- *   agentbridge kill        — Force kill all AgentBridge processes
+ *   agentbridge kill        — Stop one AgentBridge channel (current tmux/env context, or --channel/--all)
  */
 
 const args = process.argv.slice(2);
@@ -82,14 +82,19 @@ Commands:
   dev               Register local marketplace + install plugin (for local dev)
   claude [args...]  Start Claude Code with push channel enabled
   codex [args...]   Start Codex TUI connected to AgentBridge daemon
-  kill              Force kill all AgentBridge processes
+  kill [target]     Stop ONE AgentBridge channel (current context; see Multi-channel)
+  kill --all        Stop ALL named channels (default stays running)
   list [--json]     List named channels
   channel create <id>       Create a named channel
   channel trust <id> <dir>  Trust a workspace dir in a channel (skip codex prompt)
 
 Multi-channel:
   Add --channel <id> to claude/codex/kill to run an isolated channel
-  (independent ports + state + CODEX_HOME). No --channel = default (legacy).
+  (independent ports + state + CODEX_HOME).
+  Bare 'kill' (no target) stops the CURRENT channel: inside an abg-tmux session it
+  uses the session's AgentBridge marker; otherwise it follows the process env, and
+  REFUSES (rather than guess) when the context is ambiguous or unmarked. Target
+  explicitly with '--channel <id>' or 'default'.
 
 Options:
   --help, -h        Show this help message
@@ -101,7 +106,10 @@ Examples:
   abg claude --resume          # Start Claude Code and resume session
   abg codex                    # Start Codex TUI
   abg codex --model o3         # Start Codex with specific model
-  abg kill                     # Emergency: kill all processes
+  abg kill                     # Stop the CURRENT channel (tmux marker / env aware)
+  abg kill --channel ICSE27    # Stop a specific named channel
+  abg kill default             # Stop the canonical default channel
+  abg kill --all               # Stop all named channels
 `.trim());
 }
 

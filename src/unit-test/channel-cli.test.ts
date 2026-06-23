@@ -224,6 +224,104 @@ describe("resolveKillScope (无参=当前通道 / <name>=指定 / --all=全部 n
   });
 });
 
+// ── fix/kill-current-channel: tmux marker-aware resolution (marker>env, 冲突/unmarked/残留 硬拒绝) ──
+describe("resolveKillScope tmux-aware (无参 kill 认 tmux marker 当前通道)", () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "abg-ks2-")); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  const namedEnv = (id: string, over: Record<string, string> = {}) => ({
+    AGENTBRIDGE_CHANNEL_ID: id,
+    AGENTBRIDGE_CONTROL_PORT: "4512",
+    CODEX_WS_PORT: "4510",
+    CODEX_PROXY_PORT: "4511",
+    AGENTBRIDGE_STATE_DIR: "/s/" + id,
+    CODEX_HOME: "/h/" + id,
+    ...over,
+  });
+  const managed = (channelId: string) => ({
+    kind: "managed-tmux" as const,
+    sessionName: channelId,
+    sessionKind: channelId === "default" ? "default" : "named",
+    channelId,
+  });
+
+  test("managed-tmux named(registry 有) + 无 env → 杀该 named(marker 赢,pane-2 痛点修复)", async () => {
+    const p = await new ChannelRegistry(root).allocate("ICSE2027");
+    const s = resolveKillScope([], {}, root, managed("ICSE2027"));
+    expect(s.mode).toBe("named");
+    expect(s.mode === "named" && s.profile.channelId).toBe("ICSE2027");
+    expect(s.mode === "named" && s.profile.controlPort).toBe(p.controlPort);
+  });
+
+  test("managed-tmux named(registry 无) → throw(不静默杀错)", () => {
+    expect(() => resolveKillScope([], {}, root, managed("ghost"))).toThrow(/no such channel/i);
+  });
+
+  test("managed-tmux default → canonical default(4502,不被 env stateDir 污染)", () => {
+    const s = resolveKillScope([], namedEnv("default", { AGENTBRIDGE_STATE_DIR: "/s/leak" }), root, managed("default"));
+    expect(s.mode).toBe("default");
+    expect(s.mode === "default" && s.profile.controlPort).toBe(4502);
+    expect(s.mode === "default" && s.profile.stateDir).not.toBe("/s/leak");
+  });
+
+  test("managed-tmux 与完整 env 一致(都 A) → OK", async () => {
+    await new ChannelRegistry(root).allocate("A");
+    const s = resolveKillScope([], namedEnv("A"), root, managed("A"));
+    expect(s.mode === "named" && s.profile.channelId).toBe("A");
+  });
+
+  test("managed-tmux=A 与完整 env=B 冲突 → 硬拒绝(不猜)", async () => {
+    await new ChannelRegistry(root).allocate("A");
+    expect(() => resolveKillScope([], namedEnv("B"), root, managed("A"))).toThrow(/ambiguous|refus/i);
+  });
+
+  test("unmarked-tmux + 无 env → 硬拒绝(不回退 default,正是原 bug)", () => {
+    expect(() => resolveKillScope([], {}, root, { kind: "unmarked-tmux", sessionName: "ICSE27" }))
+      .toThrow(/unmarked|cannot infer/i);
+  });
+
+  // marker 三元组不一致 → 拒绝(Codex review #1: 防 malformed marker 滑回误杀)
+  test("incoherent marker sessionKind=named/channelId=default → throw(不当 default 杀)", () => {
+    expect(() => resolveKillScope([], {}, root, { kind: "managed-tmux", sessionName: "s", sessionKind: "named", channelId: "default" }))
+      .toThrow(/invalid.*marker|malformed/i);
+  });
+  test("incoherent marker sessionKind=default/channelId=A → throw(不当 named A 杀)", () => {
+    expect(() => resolveKillScope([], {}, root, { kind: "managed-tmux", sessionName: "s", sessionKind: "default", channelId: "A" }))
+      .toThrow(/invalid.*marker|malformed/i);
+  });
+  test("incoherent marker sessionKind=weird → throw", () => {
+    expect(() => resolveKillScope([], {}, root, { kind: "managed-tmux", sessionName: "s", sessionKind: "weird", channelId: "A" }))
+      .toThrow(/invalid.*marker|malformed/i);
+  });
+
+  test("outside-tmux + 残留 STATE_DIR 无 CHANNEL_ID → default(honor env);身份门移到 kill 层(Mechanism C,保 legacy/E2E)", () => {
+    const s = resolveKillScope([], { AGENTBRIDGE_STATE_DIR: "/s/ICSE2027" }, root, { kind: "outside-tmux" });
+    expect(s.mode).toBe("default");
+    expect(s.mode === "default" && s.profile.stateDir).toBe("/s/ICSE2027"); // honored; authorizeDefaultDaemonKill gates the actual signal
+  });
+
+  test("显式 --channel B 赢过 tmux marker=A", async () => {
+    await new ChannelRegistry(root).allocate("A");
+    await new ChannelRegistry(root).allocate("B");
+    const s = resolveKillScope(["--channel", "B"], {}, root, managed("A"));
+    expect(s.mode === "named" && s.profile.channelId).toBe("B");
+  });
+
+  test("--all 忽略 tmux marker,仍遍历 registry named", async () => {
+    await new ChannelRegistry(root).allocate("A");
+    await new ChannelRegistry(root).allocate("B");
+    const s = resolveKillScope(["--all"], {}, root, managed("A"));
+    expect(s.mode).toBe("all");
+    expect(s.mode === "all" && s.profiles.map((p) => p.channelId).sort()).toEqual(["A", "B"]);
+  });
+
+  test("outside-tmux + 完整 named env → env 赢(零回归)", () => {
+    const s = resolveKillScope([], namedEnv("A"), root, { kind: "outside-tmux" });
+    expect(s.mode === "named" && s.profile.channelId).toBe("A");
+  });
+});
+
 // ── PR5 Task 5.3: abg list 五态 (接 classifyChannel) ──────────────────────
 describe("buildChannelStatusList (list --json 五态)", () => {
   let root: string;
