@@ -151,6 +151,16 @@ export async function runCodex(args: string[]) {
   });
 
   if (typeof child.pid === "number") {
+    // codex-tui.json carries channel identity so `abg kill` can prove a TUI belongs to the
+    // TARGET channel before signaling (prevents cross-channel TUI kills, Mechanism D). The
+    // legacy bare codex-tui.pid is still written for backward-compatible readers.
+    const tuiRecord = {
+      pid: child.pid,
+      channelId: resolved.profile?.channelId ?? "default",
+      controlPort,
+      proxyUrl,
+    };
+    writeFileSync(stateDir.tuiMetaFile, JSON.stringify(tuiRecord) + "\n", "utf-8");
     writeFileSync(stateDir.tuiPidFile, `${child.pid}\n`, "utf-8");
   }
 
@@ -158,6 +168,9 @@ export async function runCodex(args: string[]) {
   function cleanupTuiPidFile() {
     if (cleanedTuiPid) return;
     cleanedTuiPid = true;
+    try {
+      unlinkSync(stateDir.tuiMetaFile);
+    } catch {}
     try {
       unlinkSync(stateDir.tuiPidFile);
     } catch {}

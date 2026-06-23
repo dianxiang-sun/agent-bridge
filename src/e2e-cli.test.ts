@@ -134,6 +134,9 @@ class CliE2EHarness {
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
+      // E2E exercises the CLI in a clean NON-tmux context; strip inherited $TMUX so no-arg `kill`
+      // uses the env-scoped default path (not the tmux-marker path) — matching the env-pinned daemon.
+      TMUX: "",
       PATH: `${binDir}:${process.env.PATH ?? ""}`,
       AGENTBRIDGE_STATE_DIR: stateDir,
       AGENTBRIDGE_CONTROL_PORT: String(controlPort),
@@ -858,6 +861,8 @@ function currentStatus() {
     queuedMessageCount: 0,
     proxyUrl,
     appServerUrl,
+    controlPort,
+    channelId: process.env.AGENTBRIDGE_CHANNEL_ID ?? "default",
     pid: process.pid,
   };
 }

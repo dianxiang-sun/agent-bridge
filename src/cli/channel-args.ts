@@ -8,6 +8,7 @@ import {
   defaultProfileFromEnv,
   type ChannelProfile,
 } from "../channel-profile";
+import type { TmuxKillContext } from "./tmux-context";
 
 /**
  * Parse and strip the AgentBridge-owned `--channel <id>` / `--channel=<id>` flag from argv.
@@ -98,21 +99,25 @@ export type KillScope =
   | { mode: "all"; profiles: ChannelProfile[] };
 
 /**
- * Resolve what `abg kill [...]` targets (context-aware, 用户纠偏 2026-06-20):
- *  - `--all`              → every named registry channel (NOT default — it stays常驻保活).
- *  - `<name>` / `--channel`→ that named channel from the registry (explicit wins over ambient
- *                            env); `default` → the canonical legacy default (scrubbed of any
- *                            named env so a kill-from-named-context doesn't pollute the target).
- *  - no target            → context-aware from env: a COMPLETE named channel env → that channel
- *                            (env tuple is authoritative, not the registry — kills the bridge
- *                            you're IN); a channel id set but the 6-key env incomplete → throw
- *                            (never fall back to default, that would kill the wrong bridge);
- *                            no / `default` channel id → legacy default (honors env overrides).
+ * Resolve what `abg kill [...]` targets. Identity for a no-arg kill comes from two
+ * sources — the tmux session marker (which AgentBridge-managed session am I in) and
+ * the process env (which channel was my spawn chain pinned to). A destructive no-arg
+ * kill must never GUESS when they disagree or when neither is trustworthy.
+ *
+ * Priority (no explicit target):
+ *  1. explicit argv (`--all` / `--channel` / positional / `default`) wins over all.
+ *  2. managed tmux marker + complete env: agree → use it; conflict → hard refuse.
+ *  3. managed tmux marker, no env → marker wins (kills the session you're looking at).
+ *  4. complete named env, no managed marker → env wins (the pinned spawn chain).
+ *  5. in tmux but UNMARKED → hard refuse (can't infer current channel; never fall back default).
+ *  6. otherwise → default via defaultProfileFromEnv(env) (honors legacy/E2E env overrides); the
+ *     Mechanism C identity gate in killOneTarget validates {channelId:default, pid} before signaling.
  */
 export function resolveKillScope(
   argv: string[],
   env: Record<string, string | undefined> = process.env,
   registryRoot?: string,
+  tmuxContext: TmuxKillContext = { kind: "outside-tmux" },
 ): KillScope {
   let all = false;
   let flagName: string | null = null;
@@ -155,10 +160,64 @@ export function resolveKillScope(
     return { mode: "named", profile };
   }
 
-  // No explicit target → context-aware from ambient env.
+  // ── No explicit target → context-aware (tmux marker + env), never guess on conflict ──
   const channelEnv = channelEnvFromProcessEnv(env); // throws if CHANNEL_ID set but 6-key incomplete
-  if (channelEnv && channelEnv.AGENTBRIDGE_CHANNEL_ID !== "default") {
-    return { mode: "named", profile: profileFromChannelEnv(channelEnv) }; // env tuple authoritative
+  const envId = channelEnv ? channelEnv.AGENTBRIDGE_CHANNEL_ID : null; // includes "default"
+  const envNamedId = envId !== null && envId !== "default" ? envId : null;
+
+  if (tmuxContext.kind === "managed-tmux") {
+    const tmuxId = tmuxContext.channelId;
+    // The marker is a coherent triplet: sessionKind=default ⟺ channelId=default. A malformed
+    // marker (e.g. a stale named session left with channelId=default) must NOT be trusted — it
+    // would slide back into the wrong-channel kill this fix removes (Codex review #1).
+    const coherent =
+      (tmuxContext.sessionKind === "default" && tmuxId === "default") ||
+      (tmuxContext.sessionKind === "named" && tmuxId !== "default");
+    if (!coherent) {
+      throw new Error(
+        `invalid AgentBridge tmux marker in session '${tmuxContext.sessionName}': ` +
+        `sessionKind='${tmuxContext.sessionKind}', channelId='${tmuxId}'. Refusing malformed marker for \`kill\`.\n` +
+        `Use an explicit target:  abg kill --channel <id>  |  abg kill default  (or rebuild via abg-tmux).`,
+      );
+    }
+    // marker + complete env disagree → corrupted context, refuse (don't pick either).
+    if (envId !== null && envId !== tmuxId) {
+      throw new Error(
+        `ambiguous AgentBridge channel for \`kill\`: tmux session marker says '${tmuxId}' but this ` +
+        `shell's environment says '${envId}'. Refusing to guess for a destructive command.\n` +
+        `Pick one:  abg kill --channel ${tmuxId}  |  abg kill --channel ${envId}  |  abg kill default`,
+      );
+    }
+    if (tmuxId === "default") {
+      return { mode: "default", profile: canonicalDefaultProfile() }; // marker=default → canonical (never env)
+    }
+    const id = parseChannelId(tmuxId);
+    const profile = new ChannelRegistry(registryRoot).read(id);
+    if (!profile) {
+      throw new Error(`tmux session marker says channel '${id}', but the registry has no such channel (run 'abg gc' or rebuild the session).`);
+    }
+    return { mode: "named", profile };
   }
-  return { mode: "default", profile: defaultProfileFromEnv(env) }; // legacy: honor env overrides
+
+  // Not in a managed tmux session.
+  if (envNamedId !== null) {
+    return { mode: "named", profile: profileFromChannelEnv(channelEnv!) }; // complete named env wins
+  }
+
+  // In an UNMARKED tmux session we cannot infer the current channel → refuse (never fall back default).
+  if (tmuxContext.kind === "unmarked-tmux") {
+    throw new Error(
+      `cannot infer the AgentBridge channel of unmarked tmux session '${tmuxContext.sessionName}'. ` +
+      `Bare \`abg kill\` would be unsafe here.\n` +
+      `Use an explicit target:  abg kill --channel <id>  |  abg kill default\n` +
+      `Or rebuild the session with the fixed wrapper:  abg-tmux -f @<channel> <dir>`,
+    );
+  }
+
+  // Default: outside tmux, or env pinned to default — possibly with env-overridden state/ports for a
+  // legacy/E2E default daemon. Honor env overrides here (defaultProfileFromEnv); the Mechanism C
+  // identity gate in killOneTarget (healthz must report channelId:default AND the pid must not belong
+  // to any named channel) is what actually protects a leaked named STATE_DIR/port from being killed
+  // as "default" — doing it there, not here, keeps the legitimate env-scoped default path working.
+  return { mode: "default", profile: defaultProfileFromEnv(env) };
 }
