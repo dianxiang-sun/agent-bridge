@@ -1,4 +1,5 @@
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, constants } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { StateDirResolver } from "./state-dir";
@@ -260,6 +261,31 @@ export class DaemonLifecycle {
   /** Check if daemon was intentionally killed by the user. */
   wasKilled(): boolean {
     return existsSync(this.stateDir.killedFile);
+  }
+
+  /** Bump the Claude-frontend launch generation. Called by `agentbridge claude`
+   *  BEFORE clearKilled()/spawn: any older frontend's disabled-state recovery
+   *  poller sees the mismatch on its next tick and permanently stands down,
+   *  instead of racing the new frontend for the single Claude slot the moment
+   *  the killed sentinel disappears. Codex launches do NOT bump — an old
+   *  frontend recovering after a codex-only restart is desired behavior. */
+  bumpClaudeLaunchGeneration(): string {
+    // timestamp-pid alone can collide for two bumps in the same millisecond;
+    // the random suffix makes every bump unique unconditionally.
+    const generation = `${Date.now()}-${process.pid}-${randomUUID().slice(0, 8)}`;
+    this.stateDir.ensure();
+    writeFileSync(this.stateDir.claudeLaunchGenerationFile, `${generation}\n`, "utf-8");
+    return generation;
+  }
+
+  /** Current Claude-frontend launch generation, or null if none recorded. */
+  readClaudeLaunchGeneration(): string | null {
+    try {
+      const value = readFileSync(this.stateDir.claudeLaunchGenerationFile, "utf-8").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
   }
 
   /** Launch daemon as detached background process. */

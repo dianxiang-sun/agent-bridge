@@ -78,6 +78,36 @@ describe("DaemonLifecycle", () => {
     expect(lc.readStatus()).toBeNull();
   });
 
+  test("readClaudeLaunchGeneration returns null when never bumped", () => {
+    const lc = createLifecycle();
+    expect(lc.readClaudeLaunchGeneration()).toBeNull();
+  });
+
+  test("bumpClaudeLaunchGeneration writes a generation readable afterwards", () => {
+    const lc = createLifecycle();
+    const generation = lc.bumpClaudeLaunchGeneration();
+    expect(generation.length).toBeGreaterThan(0);
+    expect(lc.readClaudeLaunchGeneration()).toBe(generation);
+  });
+
+  test("a second bump supersedes the first generation (poller stand-down key)", () => {
+    const lc = createLifecycle();
+    const first = lc.bumpClaudeLaunchGeneration();
+    const second = lc.bumpClaudeLaunchGeneration();
+    expect(second).not.toBe(first);
+    expect(lc.readClaudeLaunchGeneration()).toBe(second);
+  });
+
+  test("bump does not touch the killed sentinel (clearKilled stays separate)", () => {
+    const lc = createLifecycle();
+    lc.markKilled();
+    lc.bumpClaudeLaunchGeneration();
+    expect(lc.wasKilled()).toBe(true);
+    lc.clearKilled();
+    expect(lc.wasKilled()).toBe(false);
+    expect(lc.readClaudeLaunchGeneration()).not.toBeNull();
+  });
+
   test("resolveDaemonPath honors explicit override", () => {
     const base = join(tempDir, "dist", "cli.js");
     const override = join(tempDir, "custom-daemon.ts");

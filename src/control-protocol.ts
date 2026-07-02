@@ -12,6 +12,10 @@ export interface DaemonStatus {
   /** Channel identity (PR4 契约1). "default" for the legacy channel. */
   channelId: string;
   controlPort: number;
+  /** True while a Claude frontend holds the single attach slot (readyState not
+   *  CLOSED — the exact condition attachClaude() rejects on). Lets external
+   *  tooling (e.g. abg-restart) poll for slot release instead of blind sleeps. */
+  claudeAttached?: boolean;
   /** Recorded codex app-server pid for channel-scoped checkPorts (PR4 契约8). */
   codexAppServerPid?: number | null;
   /** Set when a port was occupied and NOT reclaimed (PR4 契约8); surfaced in PR5 list. */

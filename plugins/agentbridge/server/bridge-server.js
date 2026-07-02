@@ -13714,6 +13714,9 @@ class StateDirResolver {
   get killedFile() {
     return join(this.stateDir, "killed");
   }
+  get claudeLaunchGenerationFile() {
+    return join(this.stateDir, "claude-launch.generation");
+  }
 }
 
 // src/claude-adapter.ts
@@ -14535,6 +14538,7 @@ function describeMalformedPayload(value) {
 
 // src/daemon-lifecycle.ts
 import { spawn, execFileSync } from "child_process";
+import { randomUUID as randomUUID2 } from "crypto";
 import { existsSync as existsSync2, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, constants } from "fs";
 import { fileURLToPath } from "url";
 
@@ -15102,6 +15106,21 @@ class DaemonLifecycle {
   wasKilled() {
     return existsSync2(this.stateDir.killedFile);
   }
+  bumpClaudeLaunchGeneration() {
+    const generation = `${Date.now()}-${process.pid}-${randomUUID2().slice(0, 8)}`;
+    this.stateDir.ensure();
+    writeFileSync(this.stateDir.claudeLaunchGenerationFile, `${generation}
+`, "utf-8");
+    return generation;
+  }
+  readClaudeLaunchGeneration() {
+    try {
+      const value = readFileSync(this.stateDir.claudeLaunchGenerationFile, "utf-8").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
   launch() {
     this.stateDir.ensure();
     this.log(`Launching detached daemon on control port ${this.controlPort}`);
@@ -15331,6 +15350,8 @@ function disabledReplyError(reason) {
       return "AgentBridge rejected this session \u2014 another Claude Code session is already connected. Close the other session first, or run `agentbridge kill` to reset.";
     case "killed":
       return "AgentBridge is disabled by `agentbridge kill`. Restart Claude Code (`agentbridge claude`), switch to a new conversation, or run `/resume` to reconnect.";
+    case "superseded":
+      return "AgentBridge stood down \u2014 a newer Claude session took over this channel. Use the newer session, or restart this one (`agentbridge claude`) to take the channel back.";
   }
 }
 
@@ -15347,6 +15368,7 @@ var daemonLifecycle = new DaemonLifecycle({
   channelEnv: channelEnvFromProcessEnv()
 });
 var CONTROL_WS_URL = daemonLifecycle.controlWsUrl;
+var myClaudeLaunchGeneration = daemonLifecycle.readClaudeLaunchGeneration();
 var claude = new ClaudeAdapter(stateDir.logFile);
 var daemonClient = new DaemonClient(CONTROL_WS_URL);
 var shuttingDown = false;
@@ -15529,6 +15551,14 @@ async function pollDisabledRecovery() {
     return;
   disabledRecoveryInFlight = true;
   try {
+    const currentGeneration = daemonLifecycle.readClaudeLaunchGeneration();
+    if (currentGeneration !== myClaudeLaunchGeneration) {
+      log(`Disabled-state recovery standing down: a newer Claude frontend launched (generation ${currentGeneration ?? "none"}, ours ${myClaudeLaunchGeneration ?? "none"})`);
+      daemonDisabledReason = "superseded";
+      stopDisabledRecoveryPoller();
+      claude.pushNotification(systemMessage("system_bridge_superseded", "\u26A0\uFE0F AgentBridge: a newer Claude session took over this channel; this session's bridge stays disconnected. Use the newer session, or restart this one to take the channel back."));
+      return;
+    }
     if (daemonLifecycle.wasKilled()) {
       return;
     }

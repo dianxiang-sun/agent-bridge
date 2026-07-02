@@ -864,6 +864,7 @@ function currentStatus(): DaemonStatus {
     pid: process.pid,
     channelId: CHANNEL_ID,
     controlPort: CONTROL_PORT,
+    claudeAttached: attachedClaude !== null && attachedClaude.readyState !== WebSocket.CLOSED,
     codexAppServerPid,
     blockedPort,
   };

@@ -60,6 +60,9 @@ class StateDirResolver {
   get killedFile() {
     return join(this.stateDir, "killed");
   }
+  get claudeLaunchGenerationFile() {
+    return join(this.stateDir, "claude-launch.generation");
+  }
 }
 
 // node_modules/smol-toml/dist/error.js
@@ -514,8 +517,6 @@ function decidePortAction(opts) {
     return "block";
   if (!opts.occupantIsCodexAppServer)
     return "block";
-  if (opts.isDefault)
-    return "kill";
   if (opts.recordedAppServerPid !== null) {
     return opts.occupantPid === opts.recordedAppServerPid ? "kill" : "block";
   }
@@ -1527,7 +1528,7 @@ class CodexAdapter extends EventEmitter {
           continue;
         }
         const occupantIsCodexAppServer = cmdline.includes("codex") && cmdline.includes("app-server");
-        const action = decidePortAction({ role, occupantPid: pid, occupantIsCodexAppServer, recordedAppServerPid, isDefault });
+        const action = decidePortAction({ role, occupantPid: pid, occupantIsCodexAppServer, recordedAppServerPid });
         if (action === "kill") {
           this.log(`checkPorts: reclaiming ${role} port ${port} \u2014 killing recorded/stale codex app-server pid ${pid}`);
           try {
@@ -1753,6 +1754,7 @@ class TuiConnectionState {
 
 // src/daemon-lifecycle.ts
 import { spawn as spawn2, execFileSync } from "child_process";
+import { randomUUID } from "crypto";
 import { existsSync as existsSync2, readFileSync as readFileSync2, unlinkSync, writeFileSync, openSync, closeSync, constants } from "fs";
 import { fileURLToPath } from "url";
 function resolveDaemonPath(baseUrl = import.meta.url, override = process.env.AGENTBRIDGE_DAEMON_ENTRY) {
@@ -1930,6 +1932,21 @@ class DaemonLifecycle {
   }
   wasKilled() {
     return existsSync2(this.stateDir.killedFile);
+  }
+  bumpClaudeLaunchGeneration() {
+    const generation = `${Date.now()}-${process.pid}-${randomUUID().slice(0, 8)}`;
+    this.stateDir.ensure();
+    writeFileSync(this.stateDir.claudeLaunchGenerationFile, `${generation}
+`, "utf-8");
+    return generation;
+  }
+  readClaudeLaunchGeneration() {
+    try {
+      const value = readFileSync2(this.stateDir.claudeLaunchGenerationFile, "utf-8").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
   }
   launch() {
     this.stateDir.ensure();
@@ -2813,6 +2830,7 @@ function currentStatus() {
     pid: process.pid,
     channelId: CHANNEL_ID,
     controlPort: CONTROL_PORT,
+    claudeAttached: attachedClaude !== null && attachedClaude.readyState !== WebSocket.CLOSED,
     codexAppServerPid,
     blockedPort
   };
