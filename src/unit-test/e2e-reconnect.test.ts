@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execSync, spawn, type ChildProcess } from "node:child_process";
 import { readFileSync, unlinkSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,16 @@ const TEST_PID_FILE = join(TEST_STATE_DIR, "daemon.pid");
 const HEALTH_URL = `http://127.0.0.1:${TEST_CONTROL_PORT}/healthz`;
 const WS_URL = `ws://127.0.0.1:${TEST_CONTROL_PORT}/ws`;
 const DAEMON_PATH = fileURLToPath(new URL("../daemon.ts", import.meta.url));
+
+// The daemon writes a fresh control token at every start (anti-CSWSH gate on
+// /ws); clients must present it. Read it fresh per connect, like production.
+function testTokenProvider(): string | null {
+  try {
+    return readFileSync(join(TEST_STATE_DIR, "control.token"), "utf-8").trim() || null;
+  } catch {
+    return null;
+  }
+}
 
 let daemonProc: ChildProcess | null = null;
 
@@ -59,13 +69,37 @@ function killDaemon(): Promise<void> {
     }
     daemonProc.once("exit", () => resolve());
     daemonProc.kill("SIGTERM");
-    // Fallback force kill
+    // Fallback force kill; resolve unconditionally shortly after so a wedged
+    // child can never hang the suite (the exit listener usually wins first).
     setTimeout(() => {
       if (daemonProc && daemonProc.exitCode === null) {
         daemonProc.kill("SIGKILL");
+        setTimeout(() => resolve(), 2000);
       }
     }, 3000);
   });
+}
+
+/** Reap a daemon orphaned by a previous timed-out run: it keeps LISTENing on our
+ *  fixed test port and poisons every test below (seen live 2026-07-02, spinning
+ *  at 100% CPU). Only kills a listener whose command line is verifiably our
+ *  daemon.ts — never a foreign process. */
+function reapStaleTestDaemon(): void {
+  try {
+    const out = execSync(`lsof -nP -tiTCP:${TEST_CONTROL_PORT} -sTCP:LISTEN`, { encoding: "utf-8" }).trim();
+    for (const pidRaw of out.split("\n").filter(Boolean)) {
+      const pid = Number.parseInt(pidRaw, 10);
+      if (!Number.isFinite(pid)) continue;
+      try {
+        const cmd = execSync(`ps -p ${pid} -o command=`, { encoding: "utf-8" });
+        if (cmd.includes("daemon.ts")) {
+          process.kill(pid, "SIGKILL");
+        }
+      } catch {}
+    }
+  } catch {
+    // no listener — nothing to reap
+  }
 }
 
 function cleanup() {
@@ -73,8 +107,14 @@ function cleanup() {
 }
 
 describe("E2E: daemon lifecycle + reconnect", () => {
+  beforeAll(() => {
+    reapStaleTestDaemon();
+    cleanup();
+  });
+
   afterAll(async () => {
     await killDaemon();
+    reapStaleTestDaemon();
     cleanup();
   });
 
@@ -100,7 +140,7 @@ describe("E2E: daemon lifecycle + reconnect", () => {
   });
 
   test("DaemonClient connects and receives status", async () => {
-    const client = new DaemonClient(WS_URL);
+    const client = new DaemonClient(WS_URL, { tokenProvider: testTokenProvider });
     await client.connect();
 
     const statusPromise = new Promise<any>((resolve) => {
@@ -117,7 +157,7 @@ describe("E2E: daemon lifecycle + reconnect", () => {
   }, 10000);
 
   test("sendReply fails gracefully when Codex TUI is not connected", async () => {
-    const client = new DaemonClient(WS_URL);
+    const client = new DaemonClient(WS_URL, { tokenProvider: testTokenProvider });
     await client.connect();
     client.attachClaude();
 
@@ -139,7 +179,7 @@ describe("E2E: daemon lifecycle + reconnect", () => {
   }, 10000);
 
   test("client detects daemon shutdown via disconnect event", async () => {
-    const client = new DaemonClient(WS_URL);
+    const client = new DaemonClient(WS_URL, { tokenProvider: testTokenProvider });
     await client.connect();
     client.attachClaude();
 
@@ -164,7 +204,7 @@ describe("E2E: daemon lifecycle + reconnect", () => {
     expect(healthy).toBe(true);
 
     // Connect a new client (simulating bridge.ts reconnect flow)
-    const client = new DaemonClient(WS_URL);
+    const client = new DaemonClient(WS_URL, { tokenProvider: testTokenProvider });
     await client.connect();
 
     const statusPromise = new Promise<any>((resolve) => {
@@ -184,7 +224,7 @@ describe("E2E: daemon lifecycle + reconnect", () => {
     const healthy1 = await waitForHealth(10, 100);
     expect(healthy1).toBe(true);
 
-    const client = new DaemonClient(WS_URL);
+    const client = new DaemonClient(WS_URL, { tokenProvider: testTokenProvider });
     await client.connect();
     client.attachClaude();
 
@@ -207,7 +247,7 @@ describe("E2E: daemon lifecycle + reconnect", () => {
     expect(healthy2).toBe(true);
 
     // Reconnect — same flow as bridge.ts reconnectToDaemon()
-    const client2 = new DaemonClient(WS_URL);
+    const client2 = new DaemonClient(WS_URL, { tokenProvider: testTokenProvider });
     await client2.connect();
 
     const status2 = new Promise<any>((resolve) => {

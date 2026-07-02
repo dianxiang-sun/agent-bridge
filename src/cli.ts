@@ -87,6 +87,9 @@ Commands:
   list [--json]     List named channels
   channel create <id>       Create a named channel
   channel trust <id> <dir>  Trust a workspace dir in a channel (skip codex prompt)
+  channel delete <id> [--prune]  Delete a stopped channel; without --prune this is a
+                            dry run (shows state + disk usage). --prune removes the
+                            registry entry, stateDir AND codexHome (irreversible)
 
 Multi-channel:
   Add --channel <id> to claude/codex/kill to run an isolated channel

@@ -12,7 +12,8 @@
 import { spawn, execSync, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { EventEmitter } from "node:events";
-import { appendFileSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { appendLogRotated } from "./log-rotation";
 import { StateDirResolver } from "./state-dir";
 import { assertChannelEnvConsistent } from "./channel-profile";
 import type { BridgeMessage } from "./types";
@@ -477,6 +478,15 @@ export class CodexAdapter extends EventEmitter {
         const url = new URL(req.url);
         const isUpgrade = req.headers.get("upgrade")?.toLowerCase() === "websocket";
         self.log(`HTTP ${req.method} ${url.pathname} (upgrade=${isUpgrade})`);
+        // Anti-CSWSH: no browser client exists for the TUI proxy either, so any
+        // Origin header means a web page is knocking — reject before upgrade.
+        // (No token here: the Codex TUI is an external binary whose connect URL
+        // we can't reliably decorate; the Origin gate alone shuts out browsers.)
+        const origin = req.headers.get("origin");
+        if (origin !== null) {
+          self.log(`Rejecting proxy request carrying a browser Origin header (${origin})`);
+          return new Response("browser origins are not allowed", { status: 403 });
+        }
         if (url.pathname === "/healthz" || url.pathname === "/readyz") {
           return fetch(`http://127.0.0.1:${self.appPort}${url.pathname}`);
         }
@@ -1371,6 +1381,6 @@ export class CodexAdapter extends EventEmitter {
   private log(msg: string) {
     const line = `[${new Date().toISOString()}] [CodexAdapter] ${msg}\n`;
     process.stderr.write(line);
-    try { appendFileSync(this.logFile, line); } catch {}
+    appendLogRotated(this.logFile, line);
   }
 }

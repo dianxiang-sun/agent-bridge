@@ -23,6 +23,11 @@ const DEFAULT_WAIT_RESULT_GRACE_MS = 30000;
 
 interface DaemonClientOptions {
   waitResultGraceMs?: number;
+  /** Called on EVERY connect to fetch the daemon's current control token (the
+   *  daemon regenerates it at each start, so a static snapshot would go stale
+   *  across daemon restarts — exactly when reconnects happen). Return null to
+   *  connect without a token (pre-token daemons accept that). */
+  tokenProvider?: () => string | null;
 }
 
 export interface AskCodexWaitHandle {
@@ -60,6 +65,8 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
   >();
   private pendingWaits = new Map<string, PendingWait>();
 
+  private readonly tokenProvider: (() => string | null) | null;
+
   constructor(private readonly url: string, options: DaemonClientOptions = {}) {
     super();
     const envWaitResultGraceMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_WAIT_RESULT_GRACE_MS);
@@ -67,6 +74,7 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
       0,
       options.waitResultGraceMs ?? envWaitResultGraceMs ?? DEFAULT_WAIT_RESULT_GRACE_MS,
     );
+    this.tokenProvider = options.tokenProvider ?? null;
   }
 
   async connect() {
@@ -86,8 +94,13 @@ export class DaemonClient extends EventEmitter<DaemonClientEvents> {
     const socketId = ++nextSocketId;
     this.daemonProtocolVersion = null;
 
+    const token = this.tokenProvider?.() ?? null;
+    const wsUrl = token
+      ? `${this.url}${this.url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`
+      : this.url;
+
     await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(this.url);
+      const ws = new WebSocket(wsUrl);
       let settled = false;
 
       ws.onopen = () => {

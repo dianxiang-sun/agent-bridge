@@ -11,7 +11,7 @@ import {
 import { profileToEnv, ChannelRegistry } from "../channel-profile";
 import { parse } from "smol-toml";
 import { buildChannelList, buildChannelStatusList } from "../cli/list";
-import { createChannel, trustChannelDir } from "../cli/channel";
+import { createChannel, deleteChannel, trustChannelDir } from "../cli/channel";
 import { runGc, shouldGc } from "../cli/gc";
 
 describe("parseChannelFlag (剥离 --channel,不透传)", () => {
@@ -385,6 +385,69 @@ describe("gc + remove (registry-only,绝不删 codexHome)", () => {
     expect(reg.read("stop")).not.toBeNull();    // stopped 保留(profile 可复用)
     expect(reg.read("dead")).toBeNull();         // stale-dead 清掉 registry entry
     expect(existsSync(join(dead.codexHome, "data.sqlite"))).toBe(true); // 数据保留(registry-only)
+  });
+});
+
+describe("channel delete (显式磁盘回收 — gc 的 registry-only 之外的唯一删除路径)", () => {
+  let root: string;
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), "abg-del-")); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+
+  test("dry-run(无 --prune)报告大小,什么都不删", async () => {
+    const reg = new ChannelRegistry(root);
+    const p = await reg.allocate("A");
+    mkdirSync(p.codexHome, { recursive: true });
+    writeFileSync(join(p.codexHome, "data.sqlite"), "0123456789");
+    const r = await deleteChannel("A", { prune: false }, root);
+    expect(r.pruned).toBe(false);
+    expect(r.state).toBe("stopped");
+    expect(r.codexHomeBytes).toBeGreaterThanOrEqual(10);
+    expect(reg.read("A")).not.toBeNull();
+    expect(existsSync(join(p.codexHome, "data.sqlite"))).toBe(true);
+  });
+
+  test("--prune 删 registry entry + stateDir + codexHome", async () => {
+    const reg = new ChannelRegistry(root);
+    const p = await reg.allocate("B");
+    mkdirSync(p.stateDir, { recursive: true });
+    writeFileSync(join(p.stateDir, "status.json"), "{}");
+    mkdirSync(p.codexHome, { recursive: true });
+    writeFileSync(join(p.codexHome, "data.sqlite"), "x");
+    const r = await deleteChannel("B", { prune: true }, root);
+    expect(r.pruned).toBe(true);
+    expect(reg.read("B")).toBeNull();
+    expect(existsSync(p.stateDir)).toBe(false);
+    expect(existsSync(p.codexHome)).toBe(false);
+  });
+
+  test("stale-dead(死 pidfile)也可 --prune 删除", async () => {
+    const reg = new ChannelRegistry(root);
+    const p = await reg.allocate("C");
+    mkdirSync(p.stateDir, { recursive: true });
+    writeFileSync(join(p.stateDir, "daemon.pid"), "2147483646\n");
+    const r = await deleteChannel("C", { prune: true }, root);
+    expect(r.state).toBe("stale-dead");
+    expect(reg.read("C")).toBeNull();
+    expect(existsSync(p.stateDir)).toBe(false);
+  });
+
+  test("不在 registry 的 channel 报错", async () => {
+    await expect(deleteChannel("nope", { prune: true }, root)).rejects.toThrow("not in the registry");
+  });
+
+  test("--prune 拒绝仍有活 orphan app-server 的 channel(SIGKILL 遗孤防线)", async () => {
+    const reg = new ChannelRegistry(root);
+    const p = await reg.allocate("E");
+    mkdirSync(p.stateDir, { recursive: true });
+    mkdirSync(p.codexHome, { recursive: true });
+    writeFileSync(join(p.codexHome, "data.sqlite"), "live-orphan-data");
+    // classifyChannel sees: healthz unreachable + control port free + no daemon
+    // pidfile → "stopped". But status.json still records a LIVE app-server pid
+    // (use our own — definitely alive). --prune must refuse.
+    writeFileSync(join(p.stateDir, "status.json"), JSON.stringify({ codexAppServerPid: process.pid }));
+    await expect(deleteChannel("E", { prune: true }, root)).rejects.toThrow("live process");
+    expect(reg.read("E")).not.toBeNull();
+    expect(existsSync(join(p.codexHome, "data.sqlite"))).toBe(true);
   });
 });
 

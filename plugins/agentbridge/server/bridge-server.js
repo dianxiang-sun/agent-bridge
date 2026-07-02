@@ -6517,8 +6517,22 @@ var require_dist = __commonJS((exports, module) => {
   exports.default = formatsPlugin;
 });
 
-// src/bridge.ts
-import { appendFileSync as appendFileSync2 } from "fs";
+// src/log-rotation.ts
+import { appendFileSync, renameSync, statSync } from "fs";
+var DEFAULT_MAX_BYTES = (() => {
+  const parsed = parseInt(process.env.AGENTBRIDGE_LOG_MAX_BYTES ?? "", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 5 * 1024 * 1024;
+})();
+function appendLogRotated(file, line, maxBytes = DEFAULT_MAX_BYTES) {
+  try {
+    try {
+      if (statSync(file).size + line.length > maxBytes) {
+        renameSync(file, `${file}.1`);
+      }
+    } catch {}
+    appendFileSync(file, line);
+  } catch {}
+}
 
 // node_modules/zod/v4/core/core.js
 var NEVER = Object.freeze({
@@ -13662,7 +13676,6 @@ class StdioServerTransport {
 // src/claude-adapter.ts
 import { EventEmitter } from "events";
 import { randomUUID } from "crypto";
-import { appendFileSync } from "fs";
 
 // src/state-dir.ts
 import { mkdirSync, existsSync } from "fs";
@@ -13716,6 +13729,9 @@ class StateDirResolver {
   }
   get claudeLaunchGenerationFile() {
     return join(this.stateDir, "claude-launch.generation");
+  }
+  get controlTokenFile() {
+    return join(this.stateDir, "control.token");
   }
 }
 
@@ -14136,9 +14152,7 @@ ${formatted}`
     const line = `[${new Date().toISOString()}] [ClaudeAdapter] ${msg}
 `;
     process.stderr.write(line);
-    try {
-      appendFileSync(this.logFile, line);
-    } catch {}
+    appendLogRotated(this.logFile, line);
   }
 }
 
@@ -14167,11 +14181,13 @@ class DaemonClient extends EventEmitter2 {
   daemonProtocolVersion = null;
   pendingReplies = new Map;
   pendingWaits = new Map;
+  tokenProvider;
   constructor(url, options = {}) {
     super();
     this.url = url;
     const envWaitResultGraceMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_WAIT_RESULT_GRACE_MS);
     this.waitResultGraceMs = Math.max(0, options.waitResultGraceMs ?? envWaitResultGraceMs ?? DEFAULT_WAIT_RESULT_GRACE_MS);
+    this.tokenProvider = options.tokenProvider ?? null;
   }
   async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) {
@@ -14188,8 +14204,10 @@ class DaemonClient extends EventEmitter2 {
     }
     const socketId = ++nextSocketId;
     this.daemonProtocolVersion = null;
+    const token = this.tokenProvider?.() ?? null;
+    const wsUrl = token ? `${this.url}${this.url.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}` : this.url;
     await new Promise((resolve, reject) => {
-      const ws = new WebSocket(this.url);
+      const ws = new WebSocket(wsUrl);
       let settled = false;
       ws.onopen = () => {
         settled = true;
@@ -15121,6 +15139,14 @@ class DaemonLifecycle {
       return null;
     }
   }
+  readControlToken() {
+    try {
+      const value = readFileSync(this.stateDir.controlTokenFile, "utf-8").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
   launch() {
     this.stateDir.ensure();
     this.log(`Launching detached daemon on control port ${this.controlPort}`);
@@ -15370,7 +15396,9 @@ var daemonLifecycle = new DaemonLifecycle({
 var CONTROL_WS_URL = daemonLifecycle.controlWsUrl;
 var myClaudeLaunchGeneration = daemonLifecycle.readClaudeLaunchGeneration();
 var claude = new ClaudeAdapter(stateDir.logFile);
-var daemonClient = new DaemonClient(CONTROL_WS_URL);
+var daemonClient = new DaemonClient(CONTROL_WS_URL, {
+  tokenProvider: () => daemonLifecycle.readControlToken()
+});
 var shuttingDown = false;
 var daemonDisabled = false;
 var daemonDisabledReason = null;
@@ -15649,9 +15677,7 @@ function log(msg) {
   const line = `[${new Date().toISOString()}] [AgentBridgeFrontend] ${msg}
 `;
   process.stderr.write(line);
-  try {
-    appendFileSync2(stateDir.logFile, line);
-  } catch {}
+  appendLogRotated(stateDir.logFile, line);
 }
 log(`Starting AgentBridge frontend (daemon ws ${CONTROL_WS_URL})`);
 (async () => {

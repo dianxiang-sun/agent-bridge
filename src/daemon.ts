@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 
-import { appendFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { appendLogRotated } from "./log-rotation";
 import type { ServerWebSocket } from "bun";
 import { CodexAdapter, BlockedPortError } from "./codex-adapter";
 import {
@@ -59,6 +61,13 @@ const MAX_BUFFERED_MESSAGES = parseInt(process.env.AGENTBRIDGE_MAX_BUFFERED_MESS
 const FILTER_MODE: FilterMode =
   (process.env.AGENTBRIDGE_FILTER_MODE as FilterMode) === "full" ? "full" : "filtered";
 const IDLE_SHUTDOWN_MS = parseInt(process.env.AGENTBRIDGE_IDLE_SHUTDOWN_MS ?? String(config.idleShutdownSeconds * 1000), 10);
+
+// Control-socket token: regenerated each daemon start, written 0600 into the
+// state dir; local clients read it (DaemonLifecycle.readControlToken) and pass
+// ?token= on the /ws upgrade. Defense-in-depth vs cross-site WebSocket
+// hijacking — a hostile web page can neither read the token file nor pass the
+// Origin gate in startControlServer.
+const CONTROL_TOKEN = randomUUID();
 const ATTENTION_WINDOW_MS = parseInt(process.env.AGENTBRIDGE_ATTENTION_WINDOW_MS ?? String(config.turnCoordination.attentionWindowSeconds * 1000), 10);
 const PROTOCOL_VERSION = 1;
 
@@ -276,6 +285,19 @@ codex.on("exit", (code: number | null) => {
 });
 
 function startControlServer() {
+  try {
+    writeFileSync(stateDir.controlTokenFile, `${CONTROL_TOKEN}\n`, { mode: 0o600 });
+    // `mode` only applies when the file is CREATED — repair a pre-existing
+    // token file that may carry looser permissions.
+    chmodSync(stateDir.controlTokenFile, 0o600);
+  } catch (err: any) {
+    // Fail closed: without a readable token every legitimate client gets 403
+    // while /healthz stays green — a lying-healthy daemon. And if the state
+    // dir is unwritable the daemon cannot function anyway (pid/status/logs
+    // all live there).
+    log(`FATAL: cannot write control token file: ${err.message}`);
+    process.exit(1);
+  }
   controlServer = Bun.serve({
     port: CONTROL_PORT,
     hostname: "127.0.0.1",
@@ -290,8 +312,24 @@ function startControlServer() {
         return Response.json(currentStatus(), { status: codexBootstrapped ? 200 : 503 });
       }
 
-      if (url.pathname === "/ws" && server.upgrade(req, { data: { clientId: 0, attached: false } })) {
-        return undefined;
+      if (url.pathname === "/ws") {
+        // Anti-CSWSH gates. (1) No browser client exists, so ANY Origin header
+        // means a browser page is knocking — reject unconditionally. (2) The
+        // upgrade must present the current control token; browsers cannot read
+        // the 0600 token file. Same-UID native processes are out of scope (they
+        // can read the token anyway — that boundary is the OS user, not us).
+        const origin = req.headers.get("origin");
+        if (origin !== null) {
+          log(`Rejecting /ws upgrade carrying a browser Origin header (${origin})`);
+          return new Response("browser origins are not allowed", { status: 403 });
+        }
+        if (url.searchParams.get("token") !== CONTROL_TOKEN) {
+          log("Rejecting /ws upgrade: missing/stale control token (restart agentbridge clients so they read the current token)");
+          return new Response("control token mismatch — restart your agentbridge clients", { status: 403 });
+        }
+        if (server.upgrade(req, { data: { clientId: 0, attached: false } })) {
+          return undefined;
+        }
       }
 
       return new Response("AgentBridge daemon");
@@ -969,9 +1007,7 @@ function shutdown(reason: string) {
 function log(msg: string) {
   const line = `[${new Date().toISOString()}] [AgentBridgeDaemon][channel:${CHANNEL_ID}] ${msg}\n`;
   process.stderr.write(line);
-  try {
-    appendFileSync(stateDir.logFile, line);
-  } catch {}
+  appendLogRotated(stateDir.logFile, line);
 }
 
 const originalInjectMessage = codex.injectMessage.bind(codex);

@@ -77,4 +77,10 @@ export class StateDirResolver {
   get claudeLaunchGenerationFile(): string {
     return join(this.stateDir, "claude-launch.generation");
   }
+
+  /** Control-socket token (0600): written by the daemon at startup, read by local
+   *  clients and passed as ?token= on the /ws upgrade (anti-CSWSH defense). */
+  get controlTokenFile(): string {
+    return join(this.stateDir, "control.token");
+  }
 }
