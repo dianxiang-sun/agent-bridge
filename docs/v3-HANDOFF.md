@@ -2,14 +2,11 @@
 
 > **生成**:2026-07-14,Claude + Codex 协作会话收尾(经 Codex 交接复审后修订)。
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
-> **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.5)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
+> **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.9,2026-07-15)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> **恢复顺序(严格按此)**:
-> 1. 先跑 §B 的核验命令,确认 SHA/branch/工作树与本文一致(防读到同名但已漂移的版本);
-> 2. 读设计文档 **§0 全节**(定位/开放决策 D-1..D-6/复审记录);
-> 3. 读本文 **§B → §E → §F → §G**(状态锚 / 待办+Round-8 backlog / 坑 / 已锁定决策);
-> 4. 读设计文档 **附录 A + §6/§8/§9/§11**;
-> 5. ⚠**本恢复顺序针对已完成的 §D 调研任务,已 SUPERSEDED by §I.1(2026-07-14)——下会话请改从 §I.1 起步,勿再执行 §D**。
+> ⚠**CURRENT LIVE ENTRYPOINT = §J.1**(2026-07-15)。下会话激活唯一入口是 **§J**;§H、§I、§B「当前状态」段、以及下方旧「恢复顺序」均为历史快照,**勿据以起步**。
+> **恢复顺序(现行)**:直接读 §J(§J.1 激活 → §J.2 DONE → §J.3 待办 → §J.4 正式 apply 候选 → §J.5 教训),§J 会指引读设计文档哪些节。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G 仍有效。
+> ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
 ---
 
@@ -19,10 +16,10 @@
 
 ---
 
-## B. 状态锚 + 核验命令(接续前必跑)
+## B. 状态锚 + 核验命令(接续前必跑)⚠SUPERSEDED BY §J.1(历史快照:下方 SHA/branch/HEAD/untracked 均为 v0.5 时点,勿据以核验;现行核验见 §J.1)
 
 ```text
-架构文档 SHA-256 = 4631dad33d80c40d3d53cbbd34d53804064e2cf20c9006c52d6c5202e11bf2fd
+架构文档 SHA-256 = 4631dad33d80c40d3d53cbbd34d53804064e2cf20c9006c52d6c5202e11bf2fd   # ⚠v0.5 历史,现 v0.9=4b4010942f…
 架构文档行数     = 610(会随修订变;以 SHA 为准)
 branch = feat/ops-hardening    HEAD = af46a4238e7d4f2296545025a58782791910681a
 唯一 untracked(dirty)项:
@@ -124,7 +121,7 @@ for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
 1. **gh 多 remote 解析错仓**:`gh pr view N` 不带 `--repo` 会解析到**上游 raysonmeng 同号 PR**。查 fork PR 必须 `--repo dianxiang-sun/agent-bridge`。**本会话 Codex 曾据此误报"PR 已合并",被抽查纠回**——fork #4/#5/#6 仍 OPEN。
 2. **本机 Codex `memories` 配置日内漂移**:2026-07-14 17:25 不可变 session 快照三项均 true,17:41 文件变更后均 false(mtime 证据;当前仍 false)。涉 memories 判断**当场重读**。
 3. **多轮窄修的失明(方法论教训)**:v0.4→v0.5 翻案根因=§6 改三轮、§8.1/§9.2/§9.3/DR-7 表面签名与 push 路径没跟上。**多轮窄修后必做①跨节漂移检查②零背景冷读者实现测试**;"§6 内部自洽"审查对表面章节陈旧签名失明。且**交接文档本身也需复审**——本文初稿曾过度承诺"已修完所有矛盾"、漏 Round-8 backlog、§H 空白,被 Codex 交接复审抓回。
-4. **审批不洗白是纪律核心**(对应用户 O-1/稿件保护):反向 RPC 让 Codex 能驱动 Claude。协议须把 agent 发起 task 标 `agent_rpc`、永不升级 user、受保护写 → terminal denied 让用户在第一方对话另建 user-origin task;Codex 转述"用户同意"永不算审批。**现有 approve.sh 无 principal 字段 + 回显审批命令 + agent 可创建 bypass marker = D-3 上线 blocker**。
+4. **审批不洗白是纪律核心**(对应用户 O-1/稿件保护;⚠2026-07-15 v0.9 更新,tombstone 旧 deny-only):反向 RPC 让 Codex 能驱动 Claude。协议把 agent 发起 task 标 `agent_rpc`、**永不升级 user**;Codex 转述"用户同意"/文本自称批准永不算审批。**受保护写现为两腿(v0.6 定案,推翻旧"一律 terminal denied")**:非-policy-control 受保护写(如稿件)可经 Approval Agent+exact operationHash 人闸每次精确一批(放行腿在 §15 G-5 全过前 hard-disabled,期间等效 denied);**policy-control 资产恒拒不可洗白**(只 open_admin_settings navigation-only,换 user-origin 亦拒)。权威=architecture §6.1 决策表 rule 1-7 / §10.1 / §J.2#2。**现有 approve.sh 无 principal 字段 + 回显审批命令 + agent 可创建 bypass marker = D-3 上线 blocker(v3 删该签发入口+废 bypass marker)**。
 5. **Codex bridge busy/异常 ≠ 任务失败**:本会话 ask_codex 曾连续返回 busy,实际 Codex 已接住任务在执行(get_messages 抽到实时状态流)。busy 时先 get_messages 核盘,别盲目重发。
 6. **"注入用户已打开的 Codex 桌面线程" = 截至 2026-07-14 平台不支持**(非设计缺陷,也非厂商永久事实):无公开 ingress(上游 #17543/#18056/#21779 均 OPEN,须重查)。别当 bug 反复挑。
 7. **文档定位**:v3 是架构+决策文档,不是 wire 协议规格。§6 是规范意图单一真源,§8/§9 只引用不复述(复述=漂移源)。
@@ -145,19 +142,19 @@ for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
 
 ---
 
-## H. 下会话激活指令 ⚠SUPERSEDED by §I.1(勿执行——调研任务已完成)
+## H. 下会话激活指令 ⚠SUPERSEDED BY §J.1(勿执行——历史)
 
 > 原 §H 激活指令针对"附录 A 同类仓调研"任务,该任务已于 2026-07-14 完成(Claude 25 仓 + Codex 5 仓,证据入 docs/v3-survey-evidence.md)。**下会话激活见 §I.1。**
 
 ---
 
-## I. 会话 2 收尾(2026-07-14 晚)— 附录 A 调研会话增量
+## I. 会话 2 收尾(2026-07-14 晚)— 附录 A 调研会话增量 ⚠行动/状态段 SUPERSEDED BY §J(§I.3 证据台账/§I.6b 五仓 pinned SHA 仍有效)
 
-> SSOT 声明:docs/v3-HANDOFF.md 仍为本 arc 唯一操作性交接文件(与设计文档冲突时以 docs/v3-architecture.md 为准)。本 §I supersede §H 激活指令(其调研任务已完成)。precedence:用户拍板 > 本文件最新 live 段(§I)> docs/v3-survey-evidence.md(调研证据)> 旧段落。
-> ⚠激活唯一性:**§H 激活指令 + 本文件顶部"恢复顺序"第 5 步(指向 §D 调研)均已 SUPERSEDED by §I.1;调研任务已完成,勿再执行**。
+> ⚠**§I.1 激活指令已 SUPERSEDED BY §J.1(2026-07-15),勿执行**;下会话唯一入口=§J.1。本 §I 仅 §I.3(证据台账)、§I.6b(五仓回源锚点)作为历史证据继续有效。
+> SSOT 声明(历史):docs/v3-HANDOFF.md 为本 arc 唯一操作性交接文件(与设计文档冲突以 docs/v3-architecture.md 为准)。
 > 写于 2026-07-14 · 本会话一句话:附录 A 同类仓源码级调研完成(Claude 25 仓 + Codex 独立扩展轮 5 仓=30 仓),证据矩阵落盘并经用户 APPLY 入仓;交接经 Codex 盲审 APPROVE-WITH-FIXES 已修。 · 自审:见 §I.A(激活唯一性/memory 同步等前置项在 APPLY 后转 PASS)
 
-### I.1 激活(下会话第一步,可独立执行;§H 与旧恢复顺序勿执行)
+### I.1 激活 ⚠SUPERSEDED BY §J.1(勿执行——历史,下会话入口见 §J.1)
 
 ```
 只读接续 /Users/ds/code/agent-bridge 的 AgentBridge v3 arc(未经用户本人 APPLY 不编辑文件、不做任何 Git 写操作):
@@ -297,3 +294,112 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 ## 附:本会话对话脉络(便于回溯,非行动依据)
 
 需求澄清 → brainstorming → 现状调研 → 轮1 独立分析(确立全局 MCP)→ 轮2 收敛+红队(定 B′,发现审批 principal blocker)→ 轮3 盲区狩猎(双路清单对撞,定 5 invariant)→ 轮4 究极决策(steelman 幻影需求→修正低频真实,核实 Codex 插件+mcp-server,定 manual_claim_current,签 B″)→ 用户问"新增什么功能" → 用户问"B 缺口/C 为何最全/有无最优解"(答 Pareto,B″)→ 用户要整合文档 → v0.1 → 轮5 全文评审 → v0.2 → 轮6 定向终审 → v0.3 → 轮7 同范围复核 → v0.4(一度 REVIEWED)→ 用户要究极复审 → 轮8 三路复审翻案 → v0.5(DRAFT)→ 用户选"下会话继续"+ 要交接 → 轮9 交接复审 → 本文。
+
+## J. 会话 3+4 收尾(2026-07-15)— D-4 裁决 + 定案轮 + v0.6 APPLY + v0.6→v0.9 全量终审【最新 LIVE 段】
+
+> **SSOT 声明**:docs/v3-HANDOFF.md 为本 arc 唯一操作性交接文件。**本 §J 是唯一 live 段,下会话激活唯一入口=§J.1**;§H、§I.1、文件顶部旧「恢复顺序」均 SUPERSEDED,勿执行。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除本 §J 明示替换处)继续有效。
+> **precedence(按信息类型分)**:决策/设计=用户最新明确裁决 > docs/v3-architecture.md 设计 SSOT > 本 handoff 摘要;操作激活=§J > §I/§H/顶部旧恢复段;调研事实=docs/v3-survey-evidence.md pinned 证据(不覆盖设计裁决)。
+> 写于 2026-07-15 · 一句话:D-4 用户终裁 + D-1/2/3/5/6+MCP Tasks 定案(Codex 4 轮盲审)→ v0.6 落稿 APPLY → 全量多维终审(6 维度 agent + Codex 3 轮差分)补修至 **v0.9,Codex 三路独立 APPROVE=架构正文层可定稿**。
+
+### J.1 激活(下会话第一步;§H/§I.1/顶部旧恢复段勿执行)
+
+```
+接续 /Users/ds/code/agent-bridge 的 AgentBridge v3 arc。设计已定稿到 DRAFT v0.9(架构正文层,Codex 三路 APPROVE),
+下会话=「正式 apply」阶段。未经用户本人 APPLY 不编辑 repo 文件、不做任何 Git 写(push/PR/merge/commit)。
+
+1. 核验(全只读;⚠本 handoff 落盘后 repo HEAD 会前移,故 architecture 基线用「最后修改它的 commit」核,不锁 HEAD):
+   cd /Users/ds/code/agent-bridge
+   git status --short --branch                                  # 期望 分支 docs/v3-design、工作树 clean
+   git merge-base --is-ancestor fec2285 HEAD && echo ok         # 期望 ok(fec2285=architecture v0.9 终态基线,是 HEAD 祖先)
+   git log -1 --format=%h -- docs/v3-architecture.md            # 期望 fec2285(architecture 最后修改 commit)
+   shasum -a 256 docs/v3-architecture.md                        # 期望 4b4010942f20149e3d976946df953aac5811525e3ecc3d9027f934ae1003b5bc
+   shasum -a 256 docs/v3-survey-evidence.md                     # 期望 d6f58607898d3a33919b83d4700ef1fb41ca213db8677d34c4c2384385ac399f(未动)
+   wc -l docs/v3-architecture.md docs/v3-survey-evidence.md     # 期望 735 / 299
+   sed -n '6p' docs/v3-architecture.md                          # 期望 状态行含「DRAFT v0.9(2026-07-15)」
+   # docs/v3-HANDOFF.md 自身 SHA 随修订变,现场重算无固定期望值。
+   for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
+     --json number,state,baseRefName,headRefName -q '"#\(.number) \(.state) base=\(.baseRefName) head=\(.headRefName)"'; done
+   # 期望(动态,state/base/head 任一不符都停查因、勿预判):
+   #   #4 OPEN base=master head=fix/bundle-sync-ci-gates
+   #   #5 OPEN base=fix/bundle-sync-ci-gates head=feat/lifecycle-hardening
+   #   #6 OPEN base=feat/lifecycle-hardening head=feat/ops-hardening
+
+2. 读(按序):
+   docs/v3-architecture.md:头部状态行 + §0-A 全节(交付清单,尤其 .8/.9/.10)+ **§0-B 决策记录并逐条跟读每个「→」落点**(D-1..D-6+MCP Tasks 的正文落点权威在此,勿另维护节号清单)
+     + §6 全 + §10 全节(§10.1 两腿/§10.4 same-UID)+ §15 + §16 + **§18 全节(Q1..Q7)**;
+   → 本文件 §J(本段)+ §F(硬约束/坑;⚠§F.4 已按 §J.5 更新为两腿语义)+ §G(锁定决策)。
+   ⚠§0-A 摘要(J.3)仅是十项概览,完整交付清单逐字以 architecture §0-A.1–.10 为准。
+
+3. 「正式 apply」范围先向用户确认(§J.4 四候选,互不排斥可组合;不替用户选)。取得裁决后,对应产出仍逐项 propose→等 APPLY。
+
+禁区:未经用户本人 APPLY 不改 repo 文件/不 commit/push/merge;不凭偏好重议 §G 锁定决策与 v0.9 定案;
+  三文档保持 docs/v3-design 分支未 push 直到 §18-Q1 用户决;不把「正式 apply」自行窄化成某一条就动手。
+陈旧假设点名(恢复重查):PR #4/5/6 状态、上游 issue #17543/#18056/#21779、五仓上游 HEAD(回源用 §I.6b full SHA)、Codex memories 配置(F14)均动态。
+```
+
+### J.2 本会话做完了什么(DONE,带证据)
+
+| # | 事项 | 证据/锚点 | 等级 |
+|---|---|---|---|
+| 1 | **D-4 用户终裁**:same-UID(含被注入 agent 自 spawn 进程)显式 out-of-scope + ④混搭(peercred+token 零交互、受保护 effect 过人闸)+ 口径(人闸=O-1 纪律,对 same-UID 阻力副产品非安全承诺)。**裁决+威胁模型正文 DONE;⚠"须同时进 PEP/鉴权代码注释"(architecture §10.4)随实现 NOT DONE→见 J.3** | architecture §10.4 + §0-B D-4 | 用户拍板 |
+| 2 | **用户追加裁决(受保护写两腿)**:非-policy-control 受保护写(如稿件)可经 Approval Agent+exact operationHash 人闸每次精确一批(放行腿 G-5 全过前 hard-disabled);policy-control 资产恒拒不可洗白(只 open_admin_settings navigation-only,换 user-origin 亦拒);agent_rpc origin 永不升级 user,文本自称批准无效 | architecture §6.1 决策表 rule 1-7/§10.1/§9.3/§15 G-4 | 用户拍板 |
+| 3 | **D-1/2/3/5/6 + MCP Tasks(DR-8/Q7)定案轮**:Codex 独立出案(chat v3-finalize-r1)+ Claude 独立成案对撞,rebuttal R1-R4 收敛。**权威落点见 architecture §0-B 每条「→」;memory 仅会话背景** | architecture §0-B + §6/§10 | 双路收敛 |
+| 4 | **三文档 commit 到本地分支** docs/v3-design(基于 master,**未 push**;仓在 push_gated_roots) | commit 7b96b98(v0.5 初提)→…→fec2285(v0.9) | GOLD |
+| 5 | **v0.6 落稿 APPLY**:45 处编辑合并 4 层 delta 逐条落入 architecture.md | commit 0597bc0(+142/-42,610→710 行) | GOLD |
+| 6 | **v0.6→v0.9 全量多维终审**:6 并行只读维度 agent(落锚保真/交叉引用/跨节漂移/安全不变量对抗/冷读者完整性/术语一致)+ Codex 独立全文对抗 + 3 轮差分复核。**逐版修复清单权威在 architecture 附录 B 轮 11–13 + 各 commit message**(不在此复制) | commit 3ab6ca3/848dac2/851809f·3cf420e·fec2285;architecture 附录 B:732-734 | GOLD |
+| 7 | **终审头号 catch**:v0.6 落稿漏应用 v0.6-final 已批准的 D-1 §6.2/§6.4 两块→复发 v0.5 翻案根因,三路独立收敛抓出;v0.7 补回 | architecture §6.2/§6.4;附录 B 轮 11 | GOLD |
+| 8 | **Codex 三路独立 APPROVE**:架构正文层可定稿(v0.9);安全不变量七大攻击面对抗未发现可利用绕过 | architecture 状态行 + 附录 B 轮 13 | GOLD |
+| 9 | **memory 已真同步至 v0.9**:agentbridge-v3-design-arc frontmatter+首段墓碑+末段、MEMORY.md 索引均更新 | ~/.claude/projects/-Users-ds/memory/ | GOLD |
+
+### J.3 还没做/待办(NOT DONE)
+
+**J.3-a 下会话首选候选(见 J.4):** §18-Q1 治理 / §0-A 协议规格 / Phase 0A E2E / Phase 1A-1B 实现。
+
+**J.3-b 旧 §E backlog 对账(防隐式丢项):**
+- **已被 v0.6–v0.9 机制化(不再 open)**:attention 上限(§8.2 GCRA/TAT)、fan-out joinPolicy(§6.6)、effectiveVerificationPolicy(§6.4/§6.2)、Claim/Complete 部分语义(§6.2/§6.4)。
+- **并入 §0-A 协议规格**:多-agent provenance/伪独立共识 hash 字段、Claim/Complete 专项 conformance schema、半升级/capability downgrade wire、需求 G1-G5→字段/phase/gate 追溯矩阵。
+- **仍开放(下会话可拾)**:§18-**Q2..Q6**(broker 自动恢复承诺/Windows 范围/sidecar 计费 UX/Console 形态/ToS 法务)、Day-one/Quickstart onboarding 设计、**Phase 0B 发布前置修正**(移除失效 `--enable tui_app_server`+UDS 探针后迁移,architecture §16)。
+
+**J.3-c 实现相关(须 §0-A 规格 + Phase 0A 过后):**
+- Phase 1A Identity Kernel → Phase 1B Task Core。
+- **D-4 代码注释义务**:same-UID out-of-scope 声明须进 PEP/broker/adapter 鉴权代码注释;peercred/token 不得描述成 same-UID security guarantee(architecture §10.4)。
+- P0-0 兼容基线(ask_codex/reply/get_messages/abg-tmux/named-channel)每迁移阶段重跑。
+
+### J.4 「正式 apply」四候选(下会话首件=向用户确认走哪条/组合;不替用户选)
+
+| 候选 | 内容 | 前置 | 谁决 |
+|---|---|---|---|
+| ① 治理(§18-Q1) | 四态之一:push docs/v3-design / 开 PR / 上游 RFC / 继续 local | push 或 PR 须先按 #4→#5→#6 处理 stacked fork PR(architecture §17) | 用户 |
+| ② §0-A 规格 | 把架构不变量细化为 wire 级协议规格(实现真正前置) | 无(可即起) | 设计+用户 |
+| ③ Phase 0A E2E | §15 九项平台探测(尤其 HostTurnBoundary 身份来源=现 turn_id 恒 null) | 需实机/双桌面(涉计费/环境) | 用户授权 |
+| ④ Phase 1A/1B 实现 | Identity Kernel + Task Core | ②③完成,**且用户授权并按 #4→#5→#6 处理 stacked PR 后**(architecture §17) | 用户 APPLY;实现方执行 |
+
+推荐顺序(供参考非替决):②与③可并行起手(规格+探测互校),①随时可决,④压后。
+
+### J.5 硬约束/坑/教训(本会话新增;§F 除此明示替换处继续有效)
+
+1. **⚠大批量 Edit APPLY 后必须对 committed 字节重审**(本会话头号教训):v0.6 我把 45 处编辑合并落盘时漏掉 v0.6-final 已批准的 D-1 §6.2/§6.4 两块,**propose 对了≠apply 全了**;落稿后除残留扫,还须核「§0-B 声称落到某节的机制,该节正文是否真有」。
+2. **修复会引入新漂移**:v0.7 修复引入 2 处新洞(rootAdmissionId 半贯穿、死 worker 回 READY_IDLE);每轮补修后必须再差分复核。
+3. **单一 SSOT 本体必须完整,消费者只能纯引用**:最终收敛最后一项=§15 G-5 SSOT 本体漏 adapter、而 §10.1/§16 消费者复述清单致漂移。声称"单一 SSOT"时权威本体须含完整集合,新增成员时同时核「SSOT 本体 + 所有消费者均无副本」。
+4. **gh 多 remote 解析错仓**:查 fork PR 必带 `--repo dianxiang-sun/agent-bridge`。
+5. **不标 REVIEWED**:记取 v0.4 过早 REVIEWED 翻案;v0.9=「架构正文层收敛/APPROVE」,§0-A+Phase 0A E2E 未做前不进实现。
+6. **Codex 引用须抽查**:本会话抽查 turn_id 实为 control-protocol.ts:46/claude-adapter.ts:512(文档原写 :45/:509,已改);每轮≥1 抽查。
+7. **repo push_gated**:docs/v3-design 未 push 是有意(仓在 push_gated_roots),push 须用户 APPLY。
+8. **§F.4 已更新(tombstone 旧 deny-only)**:旧文"所有受保护写→terminal denied"是 v0.6 前语义,已被两腿裁决推翻;当前=非-policy-control 可经 G-5 后 exact-effect 人闸放行、policy-control 恒拒(见 J.2#2 / architecture §6.1 决策表 §10.1)。保留的教训=agent_rpc origin 永不升级、文本自称批准无效。
+
+### J.6 Codex 协作状态
+
+- 定案轮:chat `v3-finalize-r1`(D-1/2/3/5/6+MCP Tasks 独立出案 + rebuttal R1-R4)。
+- proposal 盲审:chat `v3-finalize-r2-review`(v1→v2.3,4 轮 REJECT→收敛,架构 P0 12→8→4→2→0)。
+- committed 终审:chat `v3-final-audit-committed`(v0.6 全文对抗 + v0.7/v0.8/v0.9 三轮差分 → 三路独立 APPROVE)。
+- 交接复审:chat `v3-handoff-J-review`(本 §J 落盘前复审,抓 future-HEAD/激活唯一性/memory 假 green/§F.4 冲突/§E backlog 漏项等,已逐条修)。
+
+### J.7 工件
+
+| 路径 | 是什么 | 状态 |
+|---|---|---|
+| docs/v3-architecture.md | 设计 SSOT,DRAFT v0.9(SHA 4b4010942f…,735 行) | green(commit fec2285) |
+| docs/v3-survey-evidence.md | 调研证据矩阵 30 仓(SHA d6f58607…,未动)。⚠其正文 :5-6 仍写"untracked/v0.5",是生成时历史元数据,当前状态以本 §J/architecture 为准 | green |
+| docs/v3-HANDOFF.md | 本文件(含本 §J live 段) | green(落盘完成) |
+| memory agentbridge-v3-design-arc.md / MEMORY.md | arc 记忆(已真同步 v0.9) | green |
+| Claude 临时(/private/tmp/.../scratchpad/,易失非权威):v0.6-final.md、v0.6-diff-proposal.md、v0.6-diff-proposal-v2.md、v0.6-diff-proposal-v2.1-delta.md、-v2.2-delta.md、-v2.3-delta.md、handoff-J-final.md | 定案轮提案史 + 本 §J 草稿 | 易失,下会话不保证存在;权威=repo commits + docs 正文 |
