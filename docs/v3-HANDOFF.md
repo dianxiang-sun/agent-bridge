@@ -10,9 +10,9 @@
 
 ---
 
-## A. 这个 arc 是什么(一句话定位)
+## A. 这个 arc 是什么(一句话定位)⚠状态部分为历史(v0.5 时点);当前=DRAFT v0.9 committed,以 §J 为准
 
-用户需求:让 AgentBridge 插件在 **Claude Code Desktop + OpenAI Codex 桌面 App** 都生效(含新开 session 自动生效),并新增**反向通信**(Codex 主动调用 Claude,`ask_claude`,同步拿结果);用户明确"可接受完全重构",要我们替他想到没想到的情况。经 9 轮 Claude+Codex 协作,产出方案 **B″** 的架构设计文档,当前 **DRAFT v0.5**,untracked 未 commit。
+用户需求:让 AgentBridge 插件在 **Claude Code Desktop + OpenAI Codex 桌面 App** 都生效(含新开 session 自动生效),并新增**反向通信**(Codex 主动调用 Claude,`ask_claude`,同步拿结果);用户明确"可接受完全重构",要我们替他想到没想到的情况。经 Claude+Codex 多轮协作,产出方案 **B″** 的架构设计文档,现为 **DRAFT v0.9**(committed docs/v3-design 分支,未 push;⚠原文"v0.5 untracked"是历史,当前态与激活见 §J)。
 
 ---
 
@@ -144,7 +144,7 @@ for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
 
 ## H. 下会话激活指令 ⚠SUPERSEDED BY §J.1(勿执行——历史)
 
-> 原 §H 激活指令针对"附录 A 同类仓调研"任务,该任务已于 2026-07-14 完成(Claude 25 仓 + Codex 5 仓,证据入 docs/v3-survey-evidence.md)。**下会话激活见 §I.1。**
+> 原 §H 激活指令针对"附录 A 同类仓调研"任务,该任务已于 2026-07-14 完成(Claude 25 仓 + Codex 5 仓,证据入 docs/v3-survey-evidence.md)。**下会话激活见 §J.1(§I.1 亦已 SUPERSEDED)。**
 
 ---
 
@@ -297,7 +297,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 ## J. 会话 3+4 收尾(2026-07-15)— D-4 裁决 + 定案轮 + v0.6 APPLY + v0.6→v0.9 全量终审【最新 LIVE 段】
 
-> **SSOT 声明**:docs/v3-HANDOFF.md 为本 arc 唯一操作性交接文件。**本 §J 是唯一 live 段,下会话激活唯一入口=§J.1**;§H、§I.1、文件顶部旧「恢复顺序」均 SUPERSEDED,勿执行。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除本 §J 明示替换处)继续有效。
+> **SSOT 声明**:docs/v3-HANDOFF.md 为本 arc 唯一操作性交接文件。**本 §J 是唯一 live 段,下会话激活唯一入口=§J.1**;§H、§I.1、文件顶部旧「恢复顺序」均 SUPERSEDED,勿执行。§I.3 **仅其证据引文/SHA 有效,其 D-1..D-6 OPEN/status 判断已被 §J+architecture supersede**;§I.6b 五仓 pinned SHA、§F/§G(除本 §J 明示替换处)继续有效。
 > **precedence(按信息类型分)**:决策/设计=用户最新明确裁决 > docs/v3-architecture.md 设计 SSOT > 本 handoff 摘要;操作激活=§J > §I/§H/顶部旧恢复段;调研事实=docs/v3-survey-evidence.md pinned 证据(不覆盖设计裁决)。
 > 写于 2026-07-15 · 一句话:D-4 用户终裁 + D-1/2/3/5/6+MCP Tasks 定案(Codex 4 轮盲审)→ v0.6 落稿 APPLY → 全量多维终审(6 维度 agent + Codex 3 轮差分)补修至 **v0.9,Codex 三路独立 APPROVE=架构正文层可定稿**。
 
@@ -328,7 +328,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
    docs/v3-architecture.md:头部状态行 + §0-A 全节(交付清单,尤其 .8/.9/.10)+ **§0-B 决策记录并逐条跟读每个「→」落点**(D-1..D-6+MCP Tasks 的正文落点权威在此,勿另维护节号清单)
      + §6 全 + §10 全节(§10.1 两腿/§10.4 same-UID)+ §15 + §16 + **§18 全节(Q1..Q7)**;
    → 本文件 §J(本段)+ §F(硬约束/坑;⚠§F.4 已按 §J.5 更新为两腿语义)+ §G(锁定决策)。
-   ⚠§0-A 摘要(J.3)仅是十项概览,完整交付清单逐字以 architecture §0-A.1–.10 为准。
+   ⚠§0-A 交付范围 = architecture §0-A.1–.10(逐字为准)+ §J.3-b 的 carry-in wire 项;G1-G5 追溯矩阵是并行文档、不在 §0-A。J.3 仅摘要。
 
 3. 「正式 apply」范围先向用户确认(§J.4 四候选,互不排斥可组合;不替用户选)。取得裁决后,对应产出仍逐项 propose→等 APPLY。
 
@@ -356,9 +356,9 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 **J.3-a 下会话首选候选(见 J.4):** §18-Q1 治理 / §0-A 协议规格 / Phase 0A E2E / Phase 1A-1B 实现。
 
 **J.3-b 旧 §E backlog 对账(防隐式丢项):**
-- **已被 v0.6–v0.9 机制化(不再 open)**:attention 上限(§8.2 GCRA/TAT)、fan-out joinPolicy(§6.6)、effectiveVerificationPolicy(§6.4/§6.2)、Claim/Complete 部分语义(§6.2/§6.4)。
-- **并入 §0-A 协议规格**:多-agent provenance/伪独立共识 hash 字段、Claim/Complete 专项 conformance schema、半升级/capability downgrade wire、需求 G1-G5→字段/phase/gate 追溯矩阵。
-- **仍开放(下会话可拾)**:§18-**Q2..Q6**(broker 自动恢复承诺/Windows 范围/sidecar 计费 UX/Console 形态/ToS 法务)、Day-one/Quickstart onboarding 设计、**Phase 0B 发布前置修正**(移除失效 `--enable tui_app_server`+UDS 探针后迁移,architecture §16)。
+- **已被 v0.6–v0.9 机制化(不再 open)**:attention 上限(§8.2 GCRA/TAT)、fan-out joinPolicy(§6.6)、effectiveVerificationSnapshot(§6.4/§6.2;broker-owned)、usage 归因(§6.6 TaskLineage/UsageEvent/usageQuality,wire 细节留 §0-A.10)、Claim/Complete 部分语义(§6.2/§6.4)。
+- **wire 细节并入 §0-A(在 §0-A.1–.10 覆盖内)**:多-agent provenance/伪独立共识 hash 字段、Claim/Complete 专项 conformance schema、半升级/capability downgrade wire。**⚠需求 G1-G5→字段/phase/gate 追溯矩阵不是 wire schema,是并行文档交付物(不在 §0-A.1–.10)**。
+- **仍开放(下会话可拾)**:§18-**Q2..Q6**(broker 自动恢复承诺/Windows 范围/sidecar 计费 UX/Console 形态/ToS 法务)、Day-one/Quickstart onboarding 设计、**Phase 0B 发布前置修正**(移除失效 `--enable tui_app_server`+UDS 探针后迁移,architecture §16)。**Q7**(MCP Tasks)处置规则已定(§18-Q7 五门槛),但「何时满足门槛并新增 Extensions Track adapter」是持续跟踪项、非已关闭。
 
 **J.3-c 实现相关(须 §0-A 规格 + Phase 0A 过后):**
 - Phase 1A Identity Kernel → Phase 1B Task Core。
