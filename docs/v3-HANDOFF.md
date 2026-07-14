@@ -4,7 +4,7 @@
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
 > **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.9,2026-07-15)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> ⚠**CURRENT LIVE ENTRYPOINT = §J.1**(2026-07-15)。下会话激活唯一入口是 **§J**;§H、§I、§B「当前状态」段、以及下方旧「恢复顺序」均为历史快照,**勿据以起步**。
+> ⚠**CURRENT LIVE ENTRYPOINT = §J.1**(2026-07-15)。下会话激活唯一入口是 **§J**;**§A/§B/§C/§D/§E/§H/§I 的状态与行动段均为 v0.5 时点历史快照**(其中 D-1..D-6"待决"、attention/verification"未机制化"、工作分支"feat/ops-hardening"等均已被 §J.2/§J.3 + architecture 推翻),以及下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
 > **恢复顺序(现行)**:直接读 §J(§J.1 激活 → §J.2 DONE → §J.3 待办 → §J.4 正式 apply 候选 → §J.5 教训),§J 会指引读设计文档哪些节。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G 仍有效。
 > ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
@@ -50,7 +50,7 @@ for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
 
 ---
 
-## C. 本会话做完了什么(DONE)
+## C. 本会话做完了什么(DONE)⚠v0.5 时点历史(会话 1 的 DONE;本 arc 全程 DONE 见 §J.2)
 
 1. **调研现状架构**:通读 agent-bridge 代码 + `docs/v2-architecture.md`。现状 = **单 Claude attach 槽 + AgentBridge 管理的单 Codex TUI/app-server proxy(MITM 模型)**;执行 RPC 以 Claude→Codex `ask_codex` 为主,Codex→Claude 只有 message-plane/pull/可选通知,**无同步 `ask_claude`**。
 2. **核实两侧桌面端扩展点事实**(本机探测 + 官方文档):16 条事实矩阵(设计文档 §2)。核心:`tui_app_server` 已 removed;**截至 2026-07-14 Codex 桌面无公开支持的既有 thread ingress**(→ 零点击注入当前线程,AgentBridge v1 官宣不支持,**这是快照非厂商永久事实**);Claude 侧唤醒 = `FileChanged+asyncRewake`(**E2E-gated,未实机验证**);同步 `ask_claude` 结果**仅当原 MCP invocation 仍存活且任务同步终结时**回原 Codex turn,否则走 SuspensionReceipt/授权恢复路径(双桌面往返仍 E2E-gated)。
@@ -61,7 +61,7 @@ for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
 
 ---
 
-## D. 下一步(用户已选:选项 2)——下会话主任务
+## D. 下一步(用户已选:选项 2)——下会话主任务 ⚠SUPERSEDED BY §J.2/§J.3(v0.5 历史:此"下一步"=调研任务,早已完成;当前下一步见 §J.4)
 
 **同类仓库源码级调研找灵感**,按设计文档 **附录 A** 关键词分类,目的:(a) 给方向找灵感;(b) 用别人怎么解来对照 §0-B 的 D-1..D-6 与 §E 的 Round-8 backlog。
 
@@ -79,7 +79,7 @@ for n in 4 5 6; do gh pr view $n --repo dianxiang-sun/agent-bridge \
 
 ---
 
-## E. 还没做/待办(NOT DONE)
+## E. 还没做/待办(NOT DONE)⚠SUPERSEDED BY §J.3(v0.5 时点 backlog:此处 D-1..D-6"待决"、attention/fan-out/verification"未机制化"、Q7"开放"均已被 §J.3/architecture 推翻;当前待办对账见 §J.3-b。仅作 backlog 来源留存,勿据以重开已定决策)
 
 ### E-1. 载荷级开放设计决策(设计文档 §0-B,D-1..D-6)——需决策,v0.5 未擅自发明解
 
@@ -357,7 +357,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 **J.3-b 旧 §E backlog 对账(防隐式丢项):**
 - **已被 v0.6–v0.9 机制化(不再 open)**:attention 上限(§8.2 GCRA/TAT)、fan-out joinPolicy(§6.6)、effectiveVerificationSnapshot(§6.4/§6.2;broker-owned)、usage 归因(§6.6 TaskLineage/UsageEvent/usageQuality,wire 细节留 §0-A.10)、Claim/Complete 部分语义(§6.2/§6.4)。
-- **wire 细节并入 §0-A(在 §0-A.1–.10 覆盖内)**:多-agent provenance/伪独立共识 hash 字段、Claim/Complete 专项 conformance schema、半升级/capability downgrade wire。**⚠需求 G1-G5→字段/phase/gate 追溯矩阵不是 wire schema,是并行文档交付物(不在 §0-A.1–.10)**。
+- **wire 细节作为 §J.3-b carry-in 补充纳入未来协议规格(部分已在 §0-A.1–.10、provenance/追溯类未显式列入,须补)**:多-agent provenance/伪独立共识 hash 字段、Claim/Complete 专项 conformance schema、半升级/capability downgrade wire。**⚠需求 G1-G5→字段/phase/gate 追溯矩阵不是 wire schema,是并行文档交付物(不在 §0-A.1–.10)**。
 - **仍开放(下会话可拾)**:§18-**Q2..Q6**(broker 自动恢复承诺/Windows 范围/sidecar 计费 UX/Console 形态/ToS 法务)、Day-one/Quickstart onboarding 设计、**Phase 0B 发布前置修正**(移除失效 `--enable tui_app_server`+UDS 探针后迁移,architecture §16)。**Q7**(MCP Tasks)处置规则已定(§18-Q7 五门槛),但「何时满足门槛并新增 Extensions Track adapter」是持续跟踪项、非已关闭。
 
 **J.3-c 实现相关(须 §0-A 规格 + Phase 0A 过后):**
