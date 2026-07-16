@@ -2196,7 +2196,7 @@ SignalFile {                           # 整文件 = 单 JSON 对象(NDJSON 不�
 
 > **本章不定义运行时 wire 行为**,是 Phase 0A 平台探测(architecture §15)的**执行准备包**:探测项登记、每项的 evidence schema、pass/fail 判据、与本文 [E2E-GATED] 标注的回填映射。**所有探测 NOT RUN**(执行需实机双桌面+计费敏感+用户授权,§0 授权口径);本章交付=探测可复现的纸面规格,不含任何探测结论。探测通过前,依赖项按各自 [E2E-GATED] 条件 profile 处理,禁当已证事实。
 
-### 14.1 探测项登记表(对齐 architecture §15 Phase 0A 九项 + 本文新增 context-basis 项)
+### 14.1 探测项登记表(对齐 architecture §15 Phase 0A 十项——第 10 项 P0A-CB 系本文起草、architecture v0.10/A-9 回填单列)
 
 | Probe | architecture §15 项(P0A-n 对齐其编号 1-9) | 本文 gate 标注回填目标 | evidence schema(§14.2) |
 |---|---|---|---|
@@ -2209,7 +2209,7 @@ SignalFile {                           # 整文件 = 单 JSON 对象(NDJSON 不�
 | P0A-7 | §15-7 `claude -p --resume <打开中桌面 session>` 是否被拒(隔离探测) | §4.6 resume 隔离前提(非本文直接回填) | ResumeIsolationEvidence |
 | P0A-8 | §15-8 UDS proxy 先行探针(handshake/reconnect/stale-socket/rollback;0B 前置) | Phase 0B 迁移前置(architecture §16;非本文直接回填,但**跳过则 0B 不可执行**) | UdsProxyEvidence |
 | P0A-9 | §15-9 HostTurnBoundary(turnId 证明/prompt_epoch) | §4.10 per-turn root 启用、§10.1 HostTurnKey/eventRef、4043 reserved→可达 | HostTurnBoundaryEvidence |
-| **P0A-CB(本文新增,§0-A.8)** | (context-basis;architecture §15 未单列——本文显式登记) | §9.3 contextDigest 来源、§9.2 current profile 开放前置、§16.2 的 4052 `context_basis_unsupported` | ContextBasisEvidence |
+| **P0A-CB(本文新增,§0-A.8)** | (context-basis;architecture §15 Phase 0A 第 10 项——v0.10/A-9 回填单列,原「未单列」已过时) | §9.3 contextDigest 来源、§9.2 current profile 开放前置、§16.2 的 4052 `context_basis_unsupported` | ContextBasisEvidence |
 
 - **P0A-CB 三问(architecture §0-A.8 逐字,本文机器化为探测项)**:①**算什么字节**——current 模式下 caller 期望的 context basis 是哪段确定性字节(宿主 transcript?prompt 历史?broker 无读 transcript API,§4.2/F10);②**谁算**——broker/adapter/宿主哪方产出 contextDigest(broker 禁读 transcript ⇒ 若须 broker 算则须宿主经认证通道提供字节);③**caller 如何取得 expectedBasis**——调用方在 submit 前从何处获得可提交的 `expectedBasis.contextDigest`。三问任一无解 → current 模式 v1 保持 [UNSUPPORTED](§9.1 已锁保守解),不静默开放。
 
@@ -2516,6 +2516,7 @@ JSON-RPC error object:**AgentBridge 应用层错误**的 `code` = 本注册表�
 
 ## 修订记录
 
+- **v0.12.18 维护性追记(2026-07-17 会话 9;A-9 companion 回链,零语义)**:architecture v0.10 修入 A-1..A-9 后,§14.1 标题「九项/未单列」两处反向引用失真——改「十项/§15 Phase 0A 第 10 项」。纯追溯修正,不触及任何 NORMATIVE 语义/注册表/GV(锚 d80341b0… 不变);Codex r75 指令(A-9 追溯闭包)+r76 复核。
 - **v0.12.18 终签追记(2026-07-16 会话 8;Codex r69 全路 APPROVE:Chunk 7 组装终审完成(CLOSED)——H1/H2 FIXED(混合分量/旧 epoch/B-then-A 三时序重放全过;本地 expiry 不复活撤权 lease 经 T17/§5.6 broker 权威确认);逆向反演 5 编辑精确重建 v0.12.17=零未声明改动;error 65 连续/domain 38=38/token 10=10/新增引用全有效;非阻断残留=仅 A-1..A-9 architecture 建议(待用户 APPLY,非 spec 残留)。本条+状态行同步为 r69 后唯一改动)**。
 - **v0.12.18(2026-07-16 会话 8;Codex r68 极窄终签 REJECT(P0=0,P1×1+P2×1;G2 FIXED(SQLite 七场景全过:no-live/pending/sent/applying-match 受理,wrong-ref/ordinal-jump/fence-mismatch 全拒且零副作用);逆向反演 9 编辑精确重建 v0.12.16=零未声明改动)修入,待 r69 终签)**:H1(P1)§7.4 恢复条 carrier 字段表删复抄改严格引用 §7.3 七字段(含 leaseId/leaseEpoch 回显——原五字段复抄与 §7.3 双 schema,冷读按五字段 decoder 无法执行 tuple 全等 guard);H2(P2)anti-rollback 合并规则精确化:tuple 全等后三可变量**各自独立** max(低分量只忽略自身,不使同包更高分量丢失;「整包忽略」仅用于 tuple mismatch——消除混合新旧分量迟到响应下 component-max 与 whole-drop 的可用性分叉)。GV 锚不变。
 - **v0.12.17(2026-07-16 会话 8;Codex r67 极窄终签 REJECT(P0=0,P1×3;F1(§2.6 五支)/F2(恢复域收窄)FIXED;逆向反演 7 编辑精确重建 v0.12.15=零未声明改动;SQLite 实跑复现 counter-first 语义污染与 NULL 谓词拒首次挂起)修入,待 r68 终签)**:G1(F3')renew_lease 响应回显 leaseId/leaseEpoch(anti-rollback 匹配键)+客户端单调合并规则(同 authority tuple 全等才应用;currentStateRevision/nextSuspensionOrdinal/leaseExpiresAt 恒 max(local, received),任一回退整包忽略;lease expiry 经本通道只延长不缩短——§2.2 control 并发下迟到旧 snapshot 不得回滚本地 authority);G2(F4')受理双规范消除(前置「受理判据=CAS…成功即写入」改「ordinal 检查仅构成唯一 accepted 谓词的只读合取,counter 写入仅发生于 accepted=true 统一事务」;「ordinal 新且 fence 全中→铸造」改「accepted=true→铸造」)+谓词三支显式二值化(liveIntent IS NULL ∨ state∈{pending,sent} ∨ (applying ∧ ref==targetRef)——缺席支显式为真,防 SQLite 三值逻辑误拒首次挂起;禁止裸 NULL 传播)。GV 锚不变。

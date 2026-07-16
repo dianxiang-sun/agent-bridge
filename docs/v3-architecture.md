@@ -3,7 +3,8 @@
 <!-- 阅读顺序:先读本 §0(文档定位/决策记录/复审记录),再进 §1。§6 是协议规范意图的单一真源。 -->
 
 
-> **状态**:DRAFT v0.9(2026-07-15)。**架构正文层经全量多维终审收敛(6 并行维度 agent + Codex 3 轮差分复核,三路独立 APPROVE)**;剩余仅 §0-A 协议规格 / E2E-gated / apply-time 可降级项。⚠不标 REVIEWED(记取 v0.4 过早 REVIEWED 教训):§0-A 协议规格与 Phase 0A E2E 探测未做前,不进入实现。**六条载荷级决策 D-1..D-6 + MCP Tasks 处置全部定案**(D-4=用户终裁;余=定案轮 Claude+Codex 双路独立出案→4 轮红队盲审收敛,证据 docs/v3-survey-evidence.md)。**v0.6→v0.7→v0.8**:对 committed 字节做全量多维终审(6 并行维度 agent + Codex 独立全文对抗)+ 差分复核两轮,补修 v0.6 落稿遗漏与 v0.7 修复引入的新漂移——含 D-1 push 原语/证据映射(复发 v0.5 根因)+ completion generation fence、broker-owned effectiveVerificationSnapshot、protectedStateRevision 推进、rootAdmissionId 贯穿 root 账、activation ownership 转移、死进程收割、G-5 composite gate、编号/引用一致性。§0-B 转决策记录,裁决正文落 §5/§6/§8/§9.2/§10/DR-2/DR-8。v0.5 说明保留如下。
+> **状态**:DRAFT v0.10(2026-07-17)。**v0.9→v0.10:协议规格(docs/v3-protocol-spec.md v0.12.18,§1-§16 封版)反哺的九项同步修订 A-1..A-9**(claim_ack 两阶段/cancelling 双义 terminationIntent/reconciliationReason 封闭注册表/三种 ack 消歧/verificationRevision 三分/resolvedContextBasis tagged union/requestSemanticDigest 双 digest 幂等/completion 信封 canonical/context-basis P0A-CB 探测项与 carrier 形态)+ §17 PR #4-#6 合并事实 + §18-Q1 裁决记录(D 为当前动作、C 为方向,2026-07-16 用户批)。九项均为**规格→架构的回写对齐**(spec 为细节 SSOT,本文锁不变量),不改 v0.9 已锁定决策。
+> **状态(v0.9 历史)**:DRAFT v0.9(2026-07-15)。**架构正文层经全量多维终审收敛(6 并行维度 agent + Codex 3 轮差分复核,三路独立 APPROVE)**;剩余仅 §0-A 协议规格 / E2E-gated / apply-time 可降级项。⚠不标 REVIEWED(记取 v0.4 过早 REVIEWED 教训):§0-A 协议规格与 Phase 0A E2E 探测未做前,不进入实现。**六条载荷级决策 D-1..D-6 + MCP Tasks 处置全部定案**(D-4=用户终裁;余=定案轮 Claude+Codex 双路独立出案→4 轮红队盲审收敛,证据 docs/v3-survey-evidence.md)。**v0.6→v0.7→v0.8**:对 committed 字节做全量多维终审(6 并行维度 agent + Codex 独立全文对抗)+ 差分复核两轮,补修 v0.6 落稿遗漏与 v0.7 修复引入的新漂移——含 D-1 push 原语/证据映射(复发 v0.5 根因)+ completion generation fence、broker-owned effectiveVerificationSnapshot、protectedStateRevision 推进、rootAdmissionId 贯穿 root 账、activation ownership 转移、死进程收割、G-5 composite gate、编号/引用一致性。§0-B 转决策记录,裁决正文落 §5/§6/§8/§9.2/§10/DR-2/DR-8。v0.5 说明保留如下。
 > **状态(v0.5 历史)**:DRAFT v0.5(2026-07-14)。**从 v0.4 "REVIEWED" 降级** —— 三路独立究极复审(补丁漂移 + 零背景冷读者实现测试 + Codex 攻击树)一致翻案:v0.4 被过早标 REVIEWED。评审链:v0.1 全文评审 → v0.2 定向终审 → v0.3 同范围复核 → v0.4 → **v0.5 究极复审**。
 > **v0.5 复审根因(三路收敛)**:§6 协议在第 6-7 轮围绕 pull/claim/offer 模型重构,但**从未为 push 路径(§9.2 CodexWorker 默认流 + §16 Phase 1B legacy 映射)、§8.1/§9.3 表面签名、phase 转移表重新推导**——最默认的执行路径反而最缺规格。v0.5 已修掉可无歧义纠正的内部矛盾(见下方修订记录);**剩余为需决策而非改字的开放项,集中在 §0-B,未擅自发明解**。(v0.6:D-1..D-6 已全部定案,§0-B 转决策记录;本段为 v0.5 历史根因存档。)
 > **文档定位(v0.5 澄清)**:本文是**架构+决策文档,不是 wire/protocol 实现规格**。§6 的字段/伪签名是**规范意图的单一真源**,§8/§9 只应引用不应复述(复述正是 v0.4 漂移之源)。控制协议 framing、注册请求/响应、sessionAuth 铸造、每 shim 的 MCP 工具 schema、phase 转移表、token 托管——属**后续协议规格**(§0-A 交付清单),本文只约束其必须满足的不变量。
@@ -28,7 +29,7 @@
 5. **存储 schema 映射**:§6 的实体(ClaimOffer/DispatchAttempt(+Event)/TaskRouteOwnership/WaiterLease/suspension 动作 token/completion receipt+tombstone/artifact blob)到 §4 表清单的映射(§4 清单已在 v0.5 补齐实体名,但列↔表归属仍待规格)。
 6. **signal-file 格式**:每 session 一文件?多 pending taskId 表示?coalescing 语义(Phase 0A.1 要测的东西本身缺规格)。
 7. **`retryClass` 的 tool-manifest**:格式、位置、authorship。
-8. **contextMode=current 的 `contextDigest` 来源**:broker 不能读宿主 transcript(§1.2 禁改、无读 API),digest 算什么字节、谁算、caller 如何取得 expectedBasis——待定;`checkpoint`/`providedBundle` 两个 context 模式当前无子系统支撑,**v1 应显式标为 unsupported 或补子系统**。
+8. **contextMode=current 的 `contextDigest` 来源**:broker 不能读宿主 transcript(§1.2 禁改、无读 API),digest 算什么字节、谁算、caller 如何取得 expectedBasis——待定;`checkpoint`/`providedBundle` 两个 context 模式当前无子系统支撑,**v1 应显式标为 unsupported 或补子系统**。(v0.10/A-9 进展)三问已由协议规格机器化为**独立探测项 P0A-CB**(§15 **Phase 0A** 第 10 项——区别于 §15 Phase 1 门禁的第 10 条;evidence schema/pass 谓词=协议规格 §14);**carrier 形态已定**:caller 取得 expectedBasis 的 wire 载体是 `context_current_v1` protocol feature 的**新增字段**——仅在协商该 feature 后出现,既有 v1 报文零改动(不违"既有报文形状不变");v1 维持 current 语义 UNSUPPORTED(合取门见 §6.2 resolvedContextBasis 注)。
 9. **人闸/效果/push-completion wire 细节(v0.6 新增)**:ApprovalChallenge/ApprovalPresentationLease/HumanGestureAttestation/`claim_approval`/EffectContext/EffectIntent/EffectPermit/EffectAttempt/WorkspaceEffectLease 完整字段与状态机、`operationHash` canonical schema、EffectMediator 接口、attestation scheme 协商与 `keyId→principal` enrollment、challenge/permit 的原子事务边界与执行前 revalidation 集合的编码;**push 路径 PushCompletionHandle 的 broker-internal holder auth、correlationKey 的生成/存储/唯一性、complete CAS 编码(§6.2/§6.4)**。
 10. **预算/生命周期/身份 wire 细节(v0.6 新增)**:TaskLineage/RootAdmissionContext/HostTurnKey/HostSessionKey/BudgetAccount/BudgetReservation/UsageEvent/ProviderCircuit/FanoutAllocation/ActivationAttempt/WorkerProcess/DedicatedBinding 完整字段与索引;worker/activation 发布默认数值(TTL/drain 序列/depth/hop/route recurrence/timeout,Phase 0 校准);`approval_prompt` quota 维度;sibling `parentTaskId/depth/hop` 赋值;activation refcount 幂等结算 key。正文只锁不变量。⚠**HostTurnBoundary 身份来源**(宿主 turnId 证明 / UserPromptSubmit epoch)= E2E-gated 前提:现实现 `turn_id` 恒 null(control-protocol.ts:46、claude-adapter.ts:512),须 Phase 0A 探测。
 
@@ -268,7 +269,7 @@ verification = not_applicable | pending | accepted | rejected
 ```
 
 - `host_turn_completed`、`executor_reported`、`runtime_bound`、`late_result`、`completion_receipt` 等是 **evidence event**(记入 task_events),不是状态;终态不可复活,后续工作另建 Task(`parentTaskId`)。
-- **reconciling**:dispatch 后未记账即崩溃、或 lease 过期且无法证明旧 turn 已停止时进入——`outcome=null` + `reconciliationReason ∈ {dispatch_ack_missing, lease_expired, …}`;对账成功回正常路径;**无法对账才 terminal + outcome=unknown(unknownReason=reconciliation_unresolved)**,非幂等写任务不得自动重试。unknown 的**唯一非 reconciling 派生路径**是 §16 Phase 1B legacy(unknownReason=legacy_evidence_only_completion),直接 terminal、不经 reconciling。
+- **reconciling**:dispatch 后未记账即崩溃、或 lease 过期且无法证明旧 turn 已停止时进入——`outcome=null` + `reconciliationReason ∈ {dispatch_ack_missing, resume_apply_uncertain, lease_expired, owner_identity_retired, executor_lost, cancel_uncertain, effect_uncertain}`(v0.10/A-3:v1 **封闭注册表**——成员集合由本文与协议规格 §5.4 共同锁定,增项须同一修订同步两处;各 reason 的进入边/授权清理/合法出口以 §5.4 为 SSOT;不得散落自由字符串);对账成功回正常路径;**无法对账才 terminal + outcome=unknown(unknownReason=reconciliation_unresolved)**,非幂等写任务不得自动重试。unknown 的**唯一非 reconciling 派生路径**是 §16 Phase 1B legacy(unknownReason=legacy_evidence_only_completion),直接 terminal、不经 reconciling。
 - **受保护路径(O-1)有序决策表(按序求值,先命中先定;机制见 §10.1)**:
   0. cancel/terminal/deadline 全局转态优先:本表仅适用 live、non-cancelling、`transactionNow < resolvedDeadlineAt` 的 Task;effect 可能已发生/dispatch 事实不明时 reconciling 先于 rule 1/2。
   1. policy-control 资产 → terminal denied + `nextAction=open_admin_settings`(恒拒,不铸 permit,换 user-origin task 亦拒;§10.1)。
@@ -279,7 +280,7 @@ verification = not_applicable | pending | accepted | rejected
   6. 真人拒绝 / approval expiry,Task deadline 未到且 executor 存活可续 → EffectIntent denied,task 回 running。
   7. 真人拒绝 / expiry,但 Task deadline 已到 或 executor 不可续 → terminal(deadline 到=expired,否则 denied)。
   条 5/6 的放行/续行在人闸设施(§10.1)全过 conformance 前 hard-disabled——落条 2。
-- 取消:`cancelling`(cancel_requested)→ terminal `cancelled`(cancel_confirmed);终态后到达的执行结果记 `late_result` evidence,不改终态、不自动重放。
+- 取消:`cancelling`(cancel_requested)→ terminal `cancelled`(cancel_confirmed);终态后到达的执行结果记 `late_result` evidence,不改终态、不自动重放。(v0.10/A-2)`cancelling` 为**双义 phase**:用户 cancel 与 broker deadline 有序停机共用同一 stop drain,语义由 **write-once `terminationIntent ∈ {cancel, expired}`**(封闭二值)承载——首个 stop CAS 赢、跨对账保留、后到 intent 不覆写先到;二者共用同一收口边,terminal outcome 按 intent 分流(cancel→cancelled,expired→expired)。**不入本 phase 的路径**:retireGeneration/owner-loss 不进 cancelling——pending_ack lease 按 T6b 未激活收口,存在 active/未证停执行风险时才按 T17 进 reconciling(reconciliationReason=owner_identity_retired),分派以协议规格 §5.2 为 SSOT;policy deny 由决策表直接 terminal denied、不经 cancelling(枚举/write-once/转移边 SSOT=协议规格 §5.1/§5.2)。
 - MCP edge adapter 可将 `waiting_input` 投影为目标 extension 的 `input_required`;此为 adapter mapping(DR-8),非 AgentBridge wire 命名兼容承诺。
 
 ### 6.2 字段与令牌分层(谁填、谁签发、何时可知)
@@ -335,17 +336,28 @@ ClaimOffer(preview_request 时 broker 签发;claimToken 绑定 offer,非 lease):
 
 claim(offerId, claimToken, sessionAuth, expectedStateRevision)——**单事务**:
   validate+consume ClaimOffer → CAS task phase/stateRevision → revoke sibling offers
-  → create DispatchAttempt → create ExecutionLease → mint completionTokenHash
+  → create DispatchAttempt → create ExecutionLease(status=pending_ack)→ mint completionTokenHash
   → phase=leased → stateRevision++
   返回 ClaimSuccessReceipt:
     taskId, stateRevision, dispatchId, leaseId, leaseEpoch, attempt,
     leaseExpiresAt, resolvedContextBasis?, payload, completionToken
+  # (v0.10/A-1)pull claim 为**两阶段交付**:claim commit 后 lease 处于 pending_ack,
+  #   客户端 claim_ack 成功前禁止开始执行(complete/renew 一律拒);broker 仅按协议规格
+  #   §5.3 及 §7.3 的完整封闭 CAS 激活(lease→active + stateRevision++),任一条件不符 →
+  #   delivery superseded,不复活;claim ackDeadline 到**或** pending_ack lease 过期
+  #   (两个独立 timer,§5.6)→ 按 T6b 未激活路径收口(执行权从未激活,不进 reconciling)。
+  #   承诺口径=至多一个 delivery revision 获得执行权(非 exactly-once start)。
+  #   存储/状态机/重放判据=协议规格 §5.2(T6b)/§5.3/§5.6/§7.3(SSOT),本文只锁不变量:
+  #   未 ACK 不产生执行权。
 
 ExecutionLease:
   leaseId, ownerTuple(同 candidateOwner 四层), leaseEpoch, attempt,
-  expiresAt, completionTokenHash
+  status(封闭枚举以协议规格 §6.1 为 SSOT;v0.10/A-1 本文仅锁两个初建态:pull 初建=pending_ack、
+    push 初建=active;claim/ACK 转移语义见其 §5.3), expiresAt, completionTokenHash
   # renew_lease(leaseId, leaseEpoch, sessionAuth) 不改 stateRevision;
-  # 过期先进 reconciling,未证明旧 turn 已停止不得重新 dispatch(retryClass=forbidden 恒禁)
+  # (v0.10/A-1)过期按 lease.status 分流:**active** 过期先进 reconciling,未证明旧 turn
+  #   已停止不得重新 dispatch(retryClass=forbidden 恒禁);**pending_ack** 过期走 T6b
+  #   未激活收口(执行权从未激活,不进 reconciling)——协议规格 §5.6 定时器表
 
 reserve_push_dispatch(taskId, adapterInstanceId, expectedStateRevision)——push 路径(§9.2 默认 CodexWorker
   + §16 Phase 1B legacy)的 broker 内部对等物,不伪造外部 ClaimOffer;**单事务**:
@@ -362,9 +374,19 @@ reserve_push_dispatch(taskId, adapterInstanceId, expectedStateRevision)——pus
 
 DispatchAttempt(基础记录不可变;retry/reconciliation = 新 attempt):
   dispatchId, attempt, adapter, executorInstanceId, routeEpoch, ownerEpoch(引用),
-  resolvedContextBasis?{runtimeSessionId, generation, baseTurnId?, contextDigest, resolvedAt}
-      # contextMode=current 在 claim CAS 时冻结;
-      # expected basis 已过期 → terminal + outcome=superseded,不得静默用新上下文
+  resolvedContextBasis?(v0.10/A-6:tagged union,取代旧"contextDigest 必填"单形):
+      generation_only{runtimeSessionRecordId, generation, resolvedAt}
+    | digest_bound{runtimeSessionRecordId, generation, baseTurnId, contextDigest, resolvedAt}
+      # contextMode=current 在 claim/dispatch CAS 时冻结(pull=claim(协议规格 §5.2/T3),
+      #   push=reserve_push_dispatch(§5.2/T4);两腿共同点=书挡② reserve 及
+      #   DispatchAttempt/ExecutionLease 初建事务——pull 此时 lease 仍 pending_ack,
+      #   执行权须后续 claim_ack 激活);
+      #   fresh 下缺席(本字段本可选);
+      # expected basis 已过期 → terminal + outcome=superseded,不得静默用新上下文;
+      # v1:current 模式语义 UNSUPPORTED(digest 字节来源三问未解,§0-A.8/P0A-CB);
+      #   **current 任一支仍为 E2E-gated**(generation_only 亦不例外)——开放合取=
+      #   P0A-CB PASS ∧ 本修订 ∧ 新 protocol feature context_current_v1 ∧ 用户 DS-3
+      #   裁决(协议规格 §9.1-§9.3/§14.3/§15)
 DispatchAttemptEvent[](append-only,承载 outbox 边界与后补信息):
   intent_committed | sent | runtime_bound(hostRuntimeSessionId/hostTurnId 在此补写)
   | acknowledged | reconcile_started | reconciled     # 各带 dispatchId+时间+证据
@@ -374,8 +396,8 @@ Result:
   nextAction?          # 仅 terminal denied 用,如 create_user_origin_task(§6.1 受保护路径)
 ```
 
-- **版本号拆分**:`stateRevision` 仅在 authority/phase/lease 状态变化时递增(offer/suspension/completion 的 CAS 基准);`eventSequence` 每个 evidence event 递增。二者不混用。
-- **idempotency 作用域**:`originInstallationId + authenticatedPrincipalId + canonicalOperationKind + canonicalTargetPolicy + idempotencyKey`(全部 broker 生成/认证的 canonical 值);payload digest 由 broker 对 canonical payload 计算;同 key 不同 digest = conflict 拒绝。
+- **版本号拆分(v0.10/A-5:二分升三分)**:`stateRevision` 仅在 authority/phase/lease 状态变化时递增(offer/suspension/completion 的 CAS 基准);`eventSequence` 每个 evidence event 递增;`verificationRevision` 驱动 verification 正交转移(§6.4 四支中 enterTerminal 判定 not_applicable/pending 之后的 pending→accepted/rejected CAS 基准),不动 phase/stateRevision(协议规格 §5.5)。三者不混用。
+- **idempotency 作用域**:`originInstallationId + authenticatedPrincipalId + canonicalOperationKind + canonicalTargetPolicy + idempotencyKey`(全部 broker 生成/认证的 canonical 值);payload digest 由 broker 对 canonical payload 计算;同 key 不同 digest = conflict 拒绝。(v0.10/A-7)幂等判定升级为**双 digest**:`payloadDigest` + `requestSemanticDigest`(对 request 全字段构造值计算,覆盖 requestedContext/deadline/policy 等**行为字段**——防"同 payload 异行为"静默命中旧 Task);同 key 任一 digest 不同=conflict;digest 在任何 side-effecting activation 之前计算并绑定(canonical 编码与计算时点=协议规格 §7.2,SSOT)。
 - **EffectContext 与 operationHash(v0.6 D-3;完整 canonical schema 见 §0-A.9)**:
 
 ```text
@@ -411,14 +433,15 @@ operationHash = SHA-256("AgentBridge/Effect/v1\0" || typed deterministic 编码(
 ### 6.4 完成与验收(防"协议完成≠任务完成",F15)
 
 1. `host_turn_completed`:宿主 turn 结束,**仅 evidence**;
-2. `complete_task(taskId, completionToken, completionRequestId, expectedStateRevision, outcome, result)`:executor 只允许提交 `outcome ∈ {succeeded, failed}`(denied/cancelled/expired/superseded/unknown 由 broker 状态机派生);`result = {inlineContent xor artifactRef, mediaType, size, resultDigest, evidenceRefs[]}`,resultDigest 由 broker 计算或验证。幂等基准 = `completionOperationDigest = H(taskId, dispatchId, leaseId, leaseEpoch, stateRevision, outcome, resultDigest)`:首次请求**原子**落 terminal result + completion receipt + token tombstone;完全相同 operation digest 的重放仅取回旧 receipt(容忍"已提交、响应丢失"),任何字段不同 → conflict;
+2. `complete_task(taskId, completionToken, completionRequestId, expectedStateRevision, outcome, result)`:executor 只允许提交 `outcome ∈ {succeeded, failed}`(denied/cancelled/expired/superseded/unknown 由 broker 状态机派生);`result = {inlineContent xor artifactRef, mediaType, size, resultDigest, evidenceRefs[]}`,resultDigest 由 broker 计算或验证。幂等基准 = `completionOperationDigest = H(taskId, dispatchId, leaseId, leaseEpoch, stateRevision, outcome, resultDigest)`:首次请求**原子**落 terminal result + completion receipt + token tombstone;完全相同 operation digest 的重放仅取回旧 receipt(容忍"已提交、响应丢失"),任何字段不同 → conflict;(v0.10/A-8)"任何字段不同→conflict"经**信封级 canonical 编码闭合**——`resultDigest` 对结果信封 `{mediaType, size, contentDigest, evidenceRefs}` 的 canonical 编码计算(防"同内容 digest、异信封元数据"绕过 conflict),`completionOperationDigest` 同样走域分隔 canonical 编码(两 domain 与字节级定义=协议规格 §7.3,SSOT);
 3. **push 证据→outcome 映射(D-1;§6.2 `reserve_push_dispatch` 配套)**:push 路径 executor 不调 wire `complete_task`,由持 `PushCompletionHandle` 的 broker 进程内 adapter 按已关联协议终态调同一 core handler 提议 outcome:匹配当前完整 tuple `{holderInstanceId, holderGeneration, adapterInstanceId, adapterGeneration, executorInstanceId, executorGeneration, correlationKey}`(与 §6.2 PushCompletionHandle 同,`rpcRequestId` 仅为 correlationKey 的 transport 构件、不单独作键)的合法 MCP result 且 `isError≠true` → 提议 `succeeded`;匹配请求的 `isError=true`/JSON-RPC error/确定 schema violation → 提议 `failed`;已确认 interrupt/cancel → broker 派生 `cancelled`(adapter 不得提交);EOF/崩溃/超时/任一 generation 不符/无法唯一关联 → 进 `reconciling`,不得猜;**Phase 1B legacy `turn_completed` 不适用本 success 映射(它非"合法 MCP result",按 §16 落 unknown)**;executor 文本自称"成功/已批准"仅是 payload,不参与裁决。adapter 只判协议调用是否明确正常返回,业务交付正确性仍归 verification;broker core 最终校验 fence/state 并按本节 receipt/tombstone 结单。
 4. verification:仅 `outcome=succeeded && effectiveVerificationSnapshot.mode≠none` 进入 `pending`,按 **broker-owned** `effectiveAcceptanceSpecRef`/`predicateProfileRef`/`manualVerifierPolicyRef`(§6.2)评估——**四支**:`outcome≠succeeded` 或 effective `mode=none` → `not_applicable`;required 检查通过 → `accepted`;**predicate 失败 / 人工拒绝 → `rejected`**(不得降成 not_applicable,防削弱 F15);verifier/spec ref 无效或不可用 → 执行前 fail-closed(不进 accepted/not_applicable)。**caller 只提供 `requestedVerificationPolicy`+`requestedAcceptanceSpec`,只能收紧;broker 从安装 policy 派生 effective 快照——policy 升 `predicate/manual` 却无有效 verifier/spec ref 时 fail-closed**(防 caller 请求 `none` 绕过,亦防 caller 提交恒真 predicate)。
 Transport ack、hook 输出、通知送达都不构成任何一层。
 
 ### 6.5 投递可靠性(transactional outbox)
 
-`commit dispatch intent → send → persist ack`;边界崩溃 → `reconciling`(§6.1),按 runtime 侧 `turnId/threadId` 对账。唤醒信号(文件/通知/nudge)一律 level-triggered"队列非空"提示;领取协议:`peek_pending → preview_request(精确 taskId) → ClaimOffer → claim(CAS) → ExecutionLease`;取消/过期返回同 ID tombstone;禁止 pop-head。**`get_messages` 保持 chat-plane 兼容,不承载 Task RPC。**
+`commit dispatch intent → send → persist ack`;边界崩溃 → `reconciling`(§6.1),按 runtime 侧 `turnId/threadId` 对账。唤醒信号(文件/通知/nudge)一律 level-triggered"队列非空"提示;领取协议:`peek_pending → preview_request(精确 taskId) → ClaimOffer → claim(CAS) → ExecutionLease(pending_ack) → claim_ack(→active,§6.2/A-1)`;取消/过期返回同 ID tombstone;禁止 pop-head。**`get_messages` 保持 chat-plane 兼容,不承载 Task RPC。**
+(v0.10/A-4)**"ack" 消歧(三个不同事实,互不派生)**:①outbox 的 `acked` = **receiver 侧 start fence 已提交**(start CAS:outbox intent 消费+推进,发生在实际调用 worker **之前**——它证明 intent 已消费,不证明 worker 收到);②`DispatchAttemptEvent.acknowledged` = **worker 已接受协议调用**的 evidence(在 start CAS 之后、由实际调用结果追加——start CAS 后、worker call 前崩溃时只有①没有②,恢复端不得凭①虚构投递);③`claim_ack` = **pull 交付激活**(执行权 pending_ack→active 的封闭 CAS,§6.2/A-1;仅 pull 路径存在)。completion 侧无 "ack"——结单须 completionToken **加** §6.4 全量 fence/CAS(token 单独不放行)。层次细节 SSOT=协议规格 §5.2(T7)/§5.3/§7.3;事务边界索引另见其 §6.3。
 
 ### 6.6 Budget / Loop / Root envelope(D-5 定案)
 
@@ -459,8 +482,11 @@ SessionStart hook:幂等注册 {session_id, cwd, generation, transcript_path},
 ask_claude 到达:broker 持久化 task → 原子更新该 session 的 signal 文件
 FileChanged hook(asyncRewake:true):不读 payload、不 claim、不领 lease——
                  只读 signal 中的不透明 taskId,exit 2 唤醒
-Claude 走 §6.5 领取协议(签名以 §6.2/§6.4 为准,不在此复述以防漂移):
+Claude 走 §6.5 领取协议(架构不变量见 §6.2/§6.4/§6.5;wire/shim 形状以协议规格 §7.3 为 SSOT,
+  不在此复述以防漂移——claim_ack 为 wire-only,shim 原子复合 claim→claim_ack,ACK 成功后才向模型
+  暴露 receipt/payload):
   peek_pending → preview_request(→ ClaimOffer{offerId,…}) → claim(offerId,…)(CAS,→ ClaimSuccessReceipt)
+  → claim_ack(交付激活,§6.2/A-1:ACK 成功前不得开始执行)
   → 执行 → complete_task(§6.4 结构化 result + completionRequestId + expectedStateRevision)
 Stop hook:仅做 dangling-request 诊断;绝不把 last_assistant_message 当结果
 ```
@@ -501,7 +527,8 @@ SessionStart:注册 session_id + cwd + generation
 Stop:任务在本 turn 期间到达 → turn 尾发一次 metadata-only systemMessage;
      绝不 decision:block(其 continuation 伪装 user prompt = origin 洗白,禁用)
 UserPromptSubmit:补查 idle 期间到达的任务;只 peek、内部超时 ≤100ms、永不阻断用户 prompt
-用户说"预览 AB-42" → §6.5 领取协议(preview_request→ClaimOffer→claim CAS,签名以 §6.2 为准)→ 正文以 untrusted
+用户说"预览 AB-42" → §6.5 领取协议(preview_request→ClaimOffer→claim CAS→claim_ack 激活;架构不变量
+     见 §6.2,wire/shim 形状以协议规格 §7.3 为 SSOT)→ 正文以 untrusted
      外部内容标记经 MCP tool result 返回(不进 developer context)→ 分析可继续;
      非受保护副作用(一般写/网络)需第二次确认;受保护路径走 §6.1 有序决策表(manual_claim 不改 origin;
      agent_rpc 恒 agent_rpc)。非-policy-control 资产:放行腿未启用时等效 terminal denied + 另建 user-origin
@@ -632,6 +659,7 @@ Premortem(6 个月失败因;概率为设计推断非实测):注意力成本超�
 7. `claude -p --resume <打开中的桌面 session>` 是否被拒(隔离环境探测,不碰真实会话)。
 8. **UDS proxy 先行探针**(0B 前置):现 proxy 为 TCP WebSocket(src/codex-adapter.ts:472-505),`--remote unix://` 的 handshake/reconnect/stale-socket/rollback 全链路探针通过后,0B 迁移才可执行——CLI parser 接受 `unix://PATH` ≠ 链路可用。
 9. **HostTurnBoundary 探测(v0.6 D-5;per-turn root 前置)**:宿主是否暴露可信 turn 边界(turnId 证明 / UserPromptSubmit epoch);现 `turn_id` 恒 null(control-protocol.ts:46、claude-adapter.ts:512),per-turn root 在此 gate 通过前不启用,退化为保守 session-scoped root(§6.6)。
+10. **(v0.10/A-9 新增)context-basis 探测(P0A-CB;contextMode=current 前置)**:§0-A.8 三问——①current 的 context basis 算**什么字节**(broker 禁读 transcript);②**谁算** contextDigest(broker/adapter/宿主);③caller **如何取得** expectedBasis。三问任一无解 → current 语义保持 v1 UNSUPPORTED。探测登记/evidence schema/pass 谓词=协议规格 §14.1-§14.3(P0A-CB 行);PASS 仅是开放合取的一项,不自动启用(另需 §6.2 A-6 修订+feature `context_current_v1`+用户 DS-3 裁决)。
 
 ### Phase 1 门禁(Identity Kernel + Task Core 落地后执行)
 
@@ -682,13 +710,13 @@ manual_claim_current、armed_pull、multi-room **各有独立 gate**,不搭 work
 
 ## 17. 治理
 
-`origin=raysonmeng/agent-bridge`(上游),本机经 `myfork=dianxiang-sun/agent-bridge` 开发;**fork 的 PR #4/#5/#6(stacked:bundle 同步+CI 门禁 / lifecycle / ops-hardening)截至 2026-07-14 仍 OPEN**【本机快照 `gh pr view --repo dianxiang-sun/agent-bridge`;注意:多 remote 下不带 `--repo` 会解析到上游同号 PR,评审轮 5 曾因此误报"已合并"】。v3 量级需二选一:(a) 上游 RFC(本文档可英译为提案;v2-architecture.md 本就是上游讨论产物,方向兼容);(b) 长期在 fork 演进。**待用户决策**(§18-Q1);无论哪条路,先合入 #4/#5/#6 再动 v3。
+`origin=raysonmeng/agent-bridge`(上游),本机经 `myfork=dianxiang-sun/agent-bridge` 开发。**(v0.10 更新)fork 的 PR #4/#5/#6(stacked:bundle 同步+CI 门禁 / lifecycle / ops-hardening)已于 2026-07-16/17 全部 squash 合入 fork master**(squash commits:#4=118533c2 / #5=e207213e / #6=8d1e96ee;#4 的 code delta 含跨平台测试路径修复,合并链另完成 repo-level fork Actions 启用(仓库设置,非 commit 内容),#5 为 master 回并+bundle 重生成,#6 为 delta 逐字节保真重放——全程经 Codex r71-r74 exact-OID 审计,证据=arc ledger 会话 9 台账)【本机快照 `gh pr view --repo dianxiang-sun/agent-bridge` 2026-07-17;注意:多 remote 下不带 `--repo` 会解析到上游同号 PR,评审轮 5 曾因此误报"已合并"】。v3 量级的治理路线(上游 RFC vs fork 演进)见 §18-Q1——**已裁决:D 为当前动作、C 为方向**(2026-07-16 用户批)。
 
 ## 18. 开放问题
 
 > **v0.6 起**:D-1..D-6 已全部定案(§0-B 决策记录;正文见 §6/§8-§10)。**后续协议规格**交付项见 §0-A(含新增 §0-A.9/.10)。以下 Q 为产品/治理级问题。
 
-- Q1:上游 RFC vs 分叉(§17)。(进展 2026-07-14/15:三文档 commit 于本地分支 docs/v3-design;v0.6 定案落稿后经全量多维终审补修为 v0.7;push/PR 待决,须先合 #4/#5/#6。)
+- Q1:上游 RFC vs 分叉(§17)。**✅已裁决(2026-07-16 用户批;v0.10 记录)**:采纳治理备忘录四态对比(A=上游单体 RFC / B=长期 fork / C=实现先行+分层上游化 / D=defer:只做共同前置)的推荐——**D 为当前动作、C 为方向性预设**:本阶段仅执行三件共同前置(①合 #4/#5/#6 ✅2026-07-17 完成;②APPLY architecture 修订 A-1..A-9=本 v0.10;③commit v3 工件 ✅0b369f6);**Q1 本体推迟至 Phase 0A 探测证据落地后按 C(拆小件按依赖序逐个上游)重估**——理由:四态中唯 D 的成本在所有未来分支下不沉没,C 是 A/B 的凸组合保留全部退路。备忘录原文=arc workspace `proposal/governance_q1_memo.md`。(历史进展 2026-07-14/15:三文档 commit 于本地分支 docs/v3-design;v0.6 定案落稿后经全量多维终审补修为 v0.7。)
 - Q2:是否承诺 broker 崩溃/OS 重启后、无前台 client 时按 deadline 自动恢复(决定 service/socket/timer activation 是否发布前置,DR-6)。
 - Q3:Windows 支持范围与时间点(UDS/信号/路径语义;两侧桌面均有 Windows 版)。
 - Q4:Claude sidecar 的 opt-in UX 与预算参数默认值。
@@ -732,4 +760,5 @@ manual_claim_current、armed_pull、multi-room **各有独立 gate**,不搭 work
 - 轮 11(committed 字节终审,2026-07-15):对已落盘 v0.6 做全量多维终审(6 并行维度 agent:落锚保真/交叉引用/跨节漂移/安全不变量对抗/冷读者完整性/术语一致 + Codex 独立全文对抗)。三路独立收敛抓出 D-1 push 机制落稿遗漏(复发 v0.5 根因);安全不变量七大攻击面(policy-control 洗白/root 重铸/deadline 竞态/effect fence/activation churn/attestation 降档/审批洗白)经对抗未发现可利用绕过。补修 P0×3(D-1 补 §6.2/§6.4、effectiveVerification、protectedStateRevision 推进)+ 一批一致性项。v0.6→v0.7。
 - 轮 12(v0.7 差分复核,2026-07-15):Codex 差分复核 v0.7 抓出 2 处 v0.7 修复引入的新漂移(rootAdmissionId 半贯穿、死 worker 回 READY_IDLE)+ verification acceptanceSpec carrier 缺口 + D-1 generation fence 未消费 + G-5 漏 allow-capable PEP。全部补修:rootAdmissionId 贯穿 TaskLineage/continuation/BudgetAccount/禁填集;broker-owned effectiveVerificationSnapshot;push completion 绑完整 generation tuple;死进程只 exit-observed→REAPED;G-5 纳入 allow-capable PEP+TCB inventory。v0.7→v0.8。
 - 轮 13(v0.8→v0.9 收敛,2026-07-15):Codex 差分复核 v0.8/v0.9 逐项收口——verification 四支路由(rejected 不得降 not_applicable)、D-1 evidence 七元 tuple 与 §6.2 完全一致+§9.2 引完整 fence、G-5 单一 SSOT(补 adapter,§10.1/§16 纯引用)。**Codex 三路独立 APPROVE:架构正文层可定稿,v0.9 收敛**;剩余仅 §0-A 协议规格/E2E-gated/apply-time 可降级项。v0.8→v0.9。
+- 轮 14(v0.9→v0.10,2026-07-17):协议规格起草期(spec v0.1→v0.12.18,Chunk 0-7 全封版)累积的 architecture 同步修订建议 **A-1..A-9** 经用户批准(2026-07-16)修入——来源=spec 轮 14/15/18 各批+r63 逐锚复核 KEEP;九项均为规格→架构回写对齐(spec=细节 SSOT,本文锁不变量),不重开 v0.9 锁定决策。同批:§17 更新 PR #4-#6 合并事实(2026-07-16/17,Codex r71-r74 审计链)、§18-Q1 裁决记录(D 为当前动作、C 为方向)。修订经 Codex 差分红队(chat v3-apply-r75 起)。
 - 全程:双方关键 artifact 互相抽查;Codex 全程只读、无 git 写操作。

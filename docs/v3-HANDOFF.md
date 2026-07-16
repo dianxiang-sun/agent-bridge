@@ -2,10 +2,10 @@
 
 > **生成**:2026-07-14,Claude + Codex 协作会话收尾(经 Codex 交接复审后修订)。
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
-> **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.9,2026-07-15)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
+> **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.10,2026-07-17 封版)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> ⚠**CURRENT LIVE ENTRYPOINT = §N.1**(2026-07-16 会话 8 收尾起;**spec arc 已完成——Chunk 7 CLOSED,剩余全部为用户 APPLY/授权事项**)。下会话激活唯一入口是 **§N**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v5**);**§A–§M 的状态与行动段均为历史快照**(§M 为会话 7 时点,已被 §N supersede;§M 内引的「激活入口 v4」亦 SUPERSEDED),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
-> **恢复顺序(现行)**:直接读 §N(§N.1 激活 → §N.2 DONE → §N.3 待用户清单 → §N.4 教训;**§K.4 授权口径与 §K.5/§L.4/§M.4 教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除 §J.5/§K/§L/§M/§N 明示替换处)仍有效。
+> ⚠**CURRENT LIVE ENTRYPOINT = §O.1**(2026-07-17 会话 9 收尾起;**PR #4-#6 全合并(master=8d1e96ee)+architecture v0.10 封版;下会话按 ledger 激活入口 v7 执行——首件=Phase 0A 纸面准备包**)。下会话激活唯一入口是 **§O**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v7**;v6 及更早 SUPERSEDED);**§A–§N 的状态与行动段均为历史快照**(§N 为会话 8 时点,已被 §O supersede),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
+> **恢复顺序(现行)**:直接读 §O(§O.1 激活 → §O.2 DONE → §O.3 状态 → §O.4 教训;**§K.4 授权口径与 §K.5/§L.4/§M.4/§N.4 教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除 §J.5/§K/§L/§M/§N 明示替换处)仍有效。
 > ~~恢复顺序(§J 时点,SUPERSEDED by §K,勿执行):读 §J(§J.1→§J.5)~~
 > ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
@@ -448,15 +448,51 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
 4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
 
-## N. 会话 8 收尾(2026-07-16)— Chunk 7 组装终审 CLOSED:spec arc 完成【最新 LIVE 段】
+## O. 会话 9 收尾(2026-07-17)— PR #4-#6 全合并 + architecture v0.10 封版【最新 LIVE 段】
 
-> **SSOT 声明**:本 §N 为唯一 live 段;§M 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4 教训、**§K.4 授权口径**继续有效)。
-> 分层 SSOT:架构=`docs/v3-architecture.md`(v0.9,fec2285,未动=4b401094…);**协议规格=`docs/v3-protocol-spec.md`(DRAFT v0.12.18;§1-§16 全章封版+Chunk 7 组装终审 CLOSED(Codex r69 全路 APPROVE);SHA 链=r69 审定字节 b7ed90c6… → 终签追记(状态行+修订记录,零行为语义)=当前磁盘 9e3b750acb0f12d2b13fe565601bc37a249bba3dad1eae1f735e638f7c2adcca;GV 全程 d80341b0…;与 gen_golden_vectors.py 一起仍未 commit)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v5,Chunk 7 CLOSED 后)」段)。
+> **SSOT 声明**:本 §O 为唯一 live 段;§N 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4/§N.4 教训、**§K.4 授权口径**继续有效)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(**DRAFT v0.10,2026-07-17 封版:A-1..A-9 spec 反哺修订+§17 PR 合并事实+§18-Q1 裁决记录;Codex r75-r78 四轮差分,r78 全路 APPROVE;磁盘 SHA=d40fc07c80481fabd0fbfbd519f34fa94c634422b769f2dc6b1648477aa9e9b9,未 commit**);协议规格=`docs/v3-protocol-spec.md`(v0.12.18+**A-9 零语义 companion**(§14.1 回链两处+维护性追记;Codex 逆向 patch 证明精确还原封版字节 9e3b750a…;磁盘 SHA=de56247a215e2186a876f72f39f427a7f6541b78846315344f597e65619815d9,未 commit);GV 全程 d80341b0…);操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v7)」段)。
+> 一句话:会话 9 完成两件——①fork PR #4→#5→#6 全部 squash 合并(**master=8d1e96ee**;根因链=fork UI 级 Actions 禁用标志(GET 谎报 enabled,PUT 才清除)+测试跨平台路径 bug(Codex 容器实跑抓出);含 #5 被 GitHub 意外 close 的临时-ref 恢复、bundle 冲突的重生成解法、#6 delta 逐字节保真重放;Codex r71-r74 exact-OID 审计,全程留证);②architecture A-1..A-9 修订 v0.10 封版(r75 抓 5 组真实漂移→r76/r77 收窄→r78 全路 APPROVE)。c 件 DS-1..3 按禁区跳过;d 件 Phase 0A 纸面包=下会话首件。
+
+### O.1 激活(下会话第一步)
+
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;**v7**)」段并按其执行(唯一入口;v6 已 SUPERSEDED)。
+
+### O.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | PR #4 CI 诊断修复+合并(9fd8596d patch→118533c2) | run 29512538844 success;chats v3-apply-r71/r72;ledger 会话 9 台账 | GOLD |
+| 2 | PR #5 事故恢复+master 回并+合并(6514171→e207213e) | #5 delta 逐字节保真 28fc6e34…;chat r73 | GOLD |
+| 3 | PR #6 delta 重放+合并(e09a9c5→8d1e96ee=master) | delta 保真 d3bda37f…;Linux 384/384;chat r74 | GOLD |
+| 4 | architecture v0.10 封版(A-1..A-9+§17+§18-Q1) | r78 全路 APPROVE;SHA d40fc07c…;审计链 r75-r78 | GOLD |
+| 5 | spec A-9 companion(零语义,可逆) | 逆向 patch 还原 9e3b750a… 实证;GV 不变 | GOLD |
+
+### O.3 状态
+
+1. fork PR #4/#5/#6——**全部 MERGED,分支已清,master=8d1e96ee,零 open PR**。
+2. architecture v0.10——**封版待 commit**(用户批准后与 spec companion、本文件一并 commit)。
+3. spec §15 DS-1/2/3——**仍待用户明确选择**(不变)。
+4. Phase 0A——纸面准备包(runbook+harness)=下会话首件;实机/计费仍须 run card。
+5. push——未授权(不变)。
+
+### O.4 教训(本会话新增;历代教训继续有效)
+
+1. **GitHub GET 状态可与内部标志脱节**:fork 的 actions/permissions 回显 enabled=true 但事件不投递,幂等 PUT 才真正清除禁用标志——以实际 run 创建为准,不信设置回显。
+2. **官方 retarget 保证不可依赖**:删除已合并 PR 的 head 分支时,依赖它的子 PR 被直接 close(实测 base_ref_deleted+closed,无 automatic_base_change 事件)——stacked 合并序=先显式 retarget 子 PR、后删父分支。
+3. **macOS 预验≠CI**:跨平台路径(XDG vs Application Support)与 PID 1 进程回收差异必须容器实跑(--init);r71 Codex 容器抓出被本机预验掩盖的确定性红灯。
+4. **生成物冲突恒重生成**:bundle 类冲突不手工 merge,从 merged source 按 canonical 命令重 build。
+5. **转写 spec 状态机的最大漂移源=凭记忆概括**(intent 枚举/timer 因果/ack 层次);概括逐锚回核(r75 五组漂移全属此类)。
+
+## N. 会话 8 收尾(2026-07-16)— Chunk 7 组装终审 CLOSED:spec arc 完成【SUPERSEDED BY §O】
+
+> **SSOT 声明(历史,SUPERSEDED BY §O)**:~~本 §N 为唯一 live 段~~;§M 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4 教训、**§K.4 授权口径**继续有效)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(v0.9,fec2285,未动=4b401094…);**协议规格=`docs/v3-protocol-spec.md`(DRAFT v0.12.18;§1-§16 全章封版+Chunk 7 组装终审 CLOSED(Codex r69 全路 APPROVE);SHA 链=r69 审定字节 b7ed90c6… → 终签追记(状态行+修订记录,零行为语义)=当前磁盘 9e3b750acb0f12d2b13fe565601bc37a249bba3dad1eae1f735e638f7c2adcca;GV 全程 d80341b0…;**已 commit:三工件(spec/GV 脚本/本文件)经用户批准入 docs/v3-design=0b369f6(2026-07-16;未 push,push 仍属禁区)**,本文件其后维护性更新(含本句)保持 modified 待下次批)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v5,Chunk 7 CLOSED 后)」段)。
 > 一句话:会话 8 完成 Chunk 7 全部四子项——P2 回扫 15 项处置(v0.12.12)→ Codex 全文对抗终审七轮(r63 全文红队 REJECT P1×6/P2×7 → r64-r68 五轮差分逐层收口 → r69 全路 APPROVE),v0.12.12→v0.12.18;冷读机械闭包(domain 38=38/error 4000-4064 连续/token 10=10/ID 前缀反向闭包);architecture 同步修订建议 A-1..A-9 定稿清单化;①治理备忘录(§18-Q1 四态)产出;全程零 Git 写。**spec arc 阶段边界已达:剩余全部为用户 APPLY/授权事项**(commit 三工件/A-1..A-9/PR #4-#6/Q1 裁决/DS-1..3/Phase 0A 授权——清单见 ledger v5 入口)。
 
 ### N.1 激活(下会话第一步)
 
-读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;v5,Chunk 7 CLOSED 后)」段并按其执行(唯一入口;注意:本 arc 无自动可续任务,v5 入口=用户裁决清单+接手核验)。
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;**v6**,用户全清单批准后)」段并按其执行(唯一入口;v5 已 SUPERSEDED——会话 8 尾声用户批准执行,授权口径与保守边界详 ledger「会话 8 尾声」段+其 r70 修正)。
 
 ### N.2 本会话 DONE(带证据)
 
@@ -466,17 +502,17 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 | 2 | 七轮全程:SHA 门禁+GV 双方实跑一致+**逆向反演每轮零未声明改动**(r64=36 编辑/r65=14/r66=13/r67=7/r68=9/r69=5;r67 起 Codex 从会话 jsonl Edit 日志无落盘反演) | 各轮 verdict artifact(stdout 摘录) | GOLD |
 | 3 | architecture 同步修订建议 **A-1..A-9** 定稿(r63 逐锚 KEEP+A-1 补两锚;Chunk 4/5 反查无新增) | ledger 会话 8 台账 A-1..A-9 条 | GOLD |
 | 4 | ①治理备忘录(§18-Q1 四态 A/B/C/D+三维度+推荐 D→C) | `~/Desktop/agentbridge_v3_apply_2026-07/proposal/governance_q1_memo.md` | 决策输入 |
-| 5 | 零 Git 写(spec+GV 脚本 untracked,HANDOFF modified;commit 权在用户) | git status | 禁区合规 |
+| 5 | 会话内零 Git 写;**会话尾经用户批准 commit 三工件=0b369f6(docs/v3-design;未 push)** | git log -1 0b369f6 | 用户 APPLY |
 
-### N.3 NOT DONE / 待用户(全部裁决/授权事项,无自动续任务)
+### N.3 状态(会话 8 尾声用户批准后;r70 审计修正口径)
 
-1. commit v3 三工件至 docs/v3-design(「落盘」不含 commit,§K.4)。
-2. architecture 修订 A-1..A-9 APPLY(只列未改)。
-3. fork PR #4/#5/#6 合并(architecture §17 前置)。
-4. §18-Q1 治理裁决(输入=governance_q1_memo.md)。
-5. spec §15 决策登记册 DS-1(Windows)/DS-2(数据治理词表)/DS-3(context-basis)。
-6. Phase 0A 九项+P0A-CB 探测执行(实机+计费,须显式授权;§14 准备包 NOT RUN 已封版)。
-7. (可选纸面)G1-G5 追溯矩阵/Phase 0A runbook 细化——无指示不自启。
+1. ✅commit v3 三工件至 docs/v3-design——**已完成(用户批准,0b369f6;未 push,push 仍属禁区)**。
+2. architecture 修订 A-1..A-9——**已授权待执行**(会话 9;编辑+红队+落盘,commit 另提请)。
+3. fork PR #4/#5/#6 合并——**已授权(绑定审时 head OID)但 #4 当前 mergeStateStatus=BLOCKED**(master required check `check` 在该分支零上报;会话 9 先诊断修复 CI 再按 #4→#5→#6 合并)。
+4. §18-Q1 治理——**已裁决=D 为当前动作、C 为方向**(用户对已展示推荐说「我都同意」;r70 确认解释成立;记录随 A-1..A-9 批注入 architecture)。
+5. spec §15 DS-1/2/3——**待用户明确选择**(r70 修正:此前清单未展示选项,「都同意」不构成定案;选项已在会话 8 最终汇报向用户展示,确认前按默认安全侧运行,不写定案标注)。
+6. Phase 0A——**纸面准备(runbook/harness)已批**;实机/计费执行须具体 run card+费用报告再批。
+7. push——未授权(不变)。
 8. 旧 §J.3-b/§E backlog 承接口径不变(§M.3#4)。
 
 ### N.4 教训(本会话新增;§K.5/§L.4/§M.4 继续有效)
