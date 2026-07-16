@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -114,6 +114,7 @@ function runCli(h: Harness, args: string[]) {
     env: {
       ...process.env,
       HOME: h.home,
+      XDG_STATE_HOME: join(h.home, ".local", "state"),
       PATH: `${h.bin}:${process.env.PATH ?? ""}`,
       CODEX_HOME: h.rootCodexHome,
       AGENTBRIDGE_DAEMON_ENTRY: h.fakeDaemon,
@@ -171,7 +172,12 @@ function pick() { return Object.fromEntries(${JSON.stringify(CHANNEL_KEYS)}.map(
 }
 
 function readRegistry(h: Harness): any | null {
-  const p = join(h.home, "Library", "Application Support", "AgentBridge", "channels", "registry.json");
+  // Mirrors canonicalBase() in channel-profile.ts: macOS uses Application Support,
+  // other platforms use XDG state (pinned to h.home/.local/state by runCli's env).
+  const p =
+    platform() === "darwin"
+      ? join(h.home, "Library", "Application Support", "AgentBridge", "channels", "registry.json")
+      : join(h.home, ".local", "state", "agentbridge", "channels", "registry.json");
   return existsSync(p) ? JSON.parse(readFileSync(p, "utf-8")) : null;
 }
 
