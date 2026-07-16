@@ -8,7 +8,7 @@ import { appendFileSync as appendFileSync2 } from "fs";
 import { spawn, execSync } from "child_process";
 import { createInterface } from "readline";
 import { EventEmitter } from "events";
-import { appendFileSync } from "fs";
+import { appendFileSync, readFileSync } from "fs";
 
 // src/state-dir.ts
 import { mkdirSync, existsSync } from "fs";
@@ -42,6 +42,9 @@ class StateDirResolver {
   get tuiPidFile() {
     return join(this.stateDir, "codex-tui.pid");
   }
+  get tuiMetaFile() {
+    return join(this.stateDir, "codex-tui.json");
+  }
   get lockFile() {
     return join(this.stateDir, "daemon.lock");
   }
@@ -57,6 +60,396 @@ class StateDirResolver {
   get killedFile() {
     return join(this.stateDir, "killed");
   }
+}
+
+// node_modules/smol-toml/dist/error.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/util.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/date.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+var DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
+
+class TomlDate extends Date {
+  #hasDate = false;
+  #hasTime = false;
+  #offset = null;
+  constructor(date) {
+    let hasDate = true;
+    let hasTime = true;
+    let offset = "Z";
+    if (typeof date === "string") {
+      let match = date.match(DATE_TIME_RE);
+      if (match) {
+        if (!match[1]) {
+          hasDate = false;
+          date = `0000-01-01T${date}`;
+        }
+        hasTime = !!match[2];
+        hasTime && date[10] === " " && (date = date.replace(" ", "T"));
+        if (match[2] && +match[2] > 23) {
+          date = "";
+        } else {
+          offset = match[3] || null;
+          date = date.toUpperCase();
+          if (!offset && hasTime)
+            date += "Z";
+        }
+      } else {
+        date = "";
+      }
+    }
+    super(date);
+    if (!isNaN(this.getTime())) {
+      this.#hasDate = hasDate;
+      this.#hasTime = hasTime;
+      this.#offset = offset;
+    }
+  }
+  isDateTime() {
+    return this.#hasDate && this.#hasTime;
+  }
+  isLocal() {
+    return !this.#hasDate || !this.#hasTime || !this.#offset;
+  }
+  isDate() {
+    return this.#hasDate && !this.#hasTime;
+  }
+  isTime() {
+    return this.#hasTime && !this.#hasDate;
+  }
+  isValid() {
+    return this.#hasDate || this.#hasTime;
+  }
+  toISOString() {
+    let iso = super.toISOString();
+    if (this.isDate())
+      return iso.slice(0, 10);
+    if (this.isTime())
+      return iso.slice(11, 23);
+    if (this.#offset === null)
+      return iso.slice(0, -1);
+    if (this.#offset === "Z")
+      return iso;
+    let offset = +this.#offset.slice(1, 3) * 60 + +this.#offset.slice(4, 6);
+    offset = this.#offset[0] === "-" ? offset : -offset;
+    let offsetDate = new Date(this.getTime() - offset * 60000);
+    return offsetDate.toISOString().slice(0, -1) + this.#offset;
+  }
+  static wrapAsOffsetDateTime(jsDate, offset = "Z") {
+    let date = new TomlDate(jsDate);
+    date.#offset = offset;
+    return date;
+  }
+  static wrapAsLocalDateTime(jsDate) {
+    let date = new TomlDate(jsDate);
+    date.#offset = null;
+    return date;
+  }
+  static wrapAsLocalDate(jsDate) {
+    let date = new TomlDate(jsDate);
+    date.#hasTime = false;
+    date.#offset = null;
+    return date;
+  }
+  static wrapAsLocalTime(jsDate) {
+    let date = new TomlDate(jsDate);
+    date.#hasDate = false;
+    date.#offset = null;
+    return date;
+  }
+}
+
+// node_modules/smol-toml/dist/primitive.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/extract.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/struct.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/parse.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/stringify.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// node_modules/smol-toml/dist/index.js
+/*!
+ * Copyright (c) Squirrel Chat et al., All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+// src/channel-profile.ts
+var CHANNEL_ENV_KEYS = {
+  channelId: "AGENTBRIDGE_CHANNEL_ID",
+  controlPort: "AGENTBRIDGE_CONTROL_PORT",
+  codexAppPort: "CODEX_WS_PORT",
+  codexProxyPort: "CODEX_PROXY_PORT",
+  stateDir: "AGENTBRIDGE_STATE_DIR",
+  codexHome: "CODEX_HOME"
+};
+function channelEnvFromProcessEnv(env = process.env) {
+  if (!env[CHANNEL_ENV_KEYS.channelId])
+    return;
+  const out = {};
+  const missing = [];
+  for (const key of Object.values(CHANNEL_ENV_KEYS)) {
+    const value = env[key];
+    if (value === undefined || value === "")
+      missing.push(key);
+    else
+      out[key] = value;
+  }
+  if (missing.length > 0) {
+    throw new Error(`Incomplete channel env: AGENTBRIDGE_CHANNEL_ID is set but missing ${missing.join(", ")}`);
+  }
+  return out;
+}
+function assertChannelEnvConsistent(channelEnv, owned, owner) {
+  for (const [key, ownedValue] of Object.entries(owned)) {
+    const envValue = channelEnv[key];
+    if (envValue !== undefined && envValue !== ownedValue) {
+      throw new Error(`${owner} channelEnv mismatch: ${key}='${envValue}' conflicts with authoritative '${ownedValue}' (split-brain)`);
+    }
+  }
+}
+function channelMessagePrefix(channelId) {
+  return channelId === "default" ? "" : `[channel ${channelId}] `;
 }
 
 // src/app-server-protocol.ts
@@ -114,6 +507,31 @@ function parsePositiveIntegerMs(value) {
 function formatDrainTimeoutWarning(entryCount) {
   return DRAIN_TIMEOUT_WARNING_TEMPLATE.replace("N", String(entryCount));
 }
+function decidePortAction(opts) {
+  if (opts.occupantPid === null)
+    return "free";
+  if (opts.role === "proxy")
+    return "block";
+  if (!opts.occupantIsCodexAppServer)
+    return "block";
+  if (opts.isDefault)
+    return "kill";
+  if (opts.recordedAppServerPid !== null) {
+    return opts.occupantPid === opts.recordedAppServerPid ? "kill" : "block";
+  }
+  return "block";
+}
+
+class BlockedPortError extends Error {
+  port;
+  portRole;
+  constructor(port, portRole, message) {
+    super(message);
+    this.port = port;
+    this.portRole = portRole;
+    this.name = "BlockedPortError";
+  }
+}
 
 class CodexAdapter extends EventEmitter {
   static RESPONSE_TRACKING_TTL_MS = 30000;
@@ -126,6 +544,10 @@ class CodexAdapter extends EventEmitter {
   appPort;
   proxyPort;
   logFile;
+  channelEnv;
+  statusFile;
+  channelId;
+  onAppServerSpawned;
   drainTimeoutMs;
   tuiConnId = 0;
   connIdCounter = 0;
@@ -146,11 +568,19 @@ class CodexAdapter extends EventEmitter {
   reconnectingForNewSession = false;
   replayingBufferedMessages = false;
   appServerGeneration = 0;
-  constructor(appPort = 4500, proxyPort = 4501, logFile = new StateDirResolver().logFile) {
+  constructor(appPort = 4500, proxyPort = 4501, logFile = new StateDirResolver().logFile, options = {}) {
     super();
     this.appPort = appPort;
     this.proxyPort = proxyPort;
     this.logFile = logFile;
+    this.channelEnv = options.channelEnv ?? {};
+    this.statusFile = options.statusFile ?? null;
+    this.channelId = options.channelId ?? process.env.AGENTBRIDGE_CHANNEL_ID ?? "default";
+    this.onAppServerSpawned = options.onAppServerSpawned ?? null;
+    assertChannelEnvConsistent(this.channelEnv, {
+      CODEX_WS_PORT: String(appPort),
+      CODEX_PROXY_PORT: String(proxyPort)
+    }, "CodexAdapter");
     this.drainTimeoutMs = parsePositiveIntegerMs(process.env.AGENTBRIDGE_DRAIN_TIMEOUT_MS) ?? DEFAULT_DRAIN_TIMEOUT_MS;
   }
   get appServerUrl() {
@@ -162,13 +592,19 @@ class CodexAdapter extends EventEmitter {
   get activeThreadId() {
     return this.threadId;
   }
+  buildSpawnEnv() {
+    return { ...process.env, ...this.channelEnv };
+  }
   async start() {
     this.intentionalDisconnect = false;
     await this.checkPorts();
     this.log(`Spawning codex app-server on ${this.appServerUrl}`);
     this.proc = spawn("codex", ["app-server", "--listen", this.appServerUrl], {
-      stdio: ["pipe", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"],
+      env: this.buildSpawnEnv()
     });
+    if (typeof this.proc.pid === "number")
+      this.onAppServerSpawned?.(this.proc.pid);
     this.proc.on("error", (err) => this.emit("error", err));
     this.proc.on("exit", (code) => this.emit("exit", code));
     const stderrRl = createInterface({ input: this.proc.stderr });
@@ -1056,50 +1492,51 @@ class CodexAdapter extends EventEmitter {
     this.serverRequestToProxy.clear();
     this.pendingServerResponses.clear();
   }
+  readRecordedAppServerPid() {
+    if (!this.statusFile)
+      return null;
+    try {
+      const raw = JSON.parse(readFileSync(this.statusFile, "utf-8"));
+      const pid = raw?.codexAppServerPid;
+      return typeof pid === "number" && Number.isFinite(pid) ? pid : null;
+    } catch {
+      return null;
+    }
+  }
   async checkPorts() {
-    for (const port of [this.appPort, this.proxyPort]) {
+    const isDefault = this.channelId === "default";
+    const recordedAppServerPid = this.readRecordedAppServerPid();
+    const portRoles = [
+      [this.appPort, "app"],
+      [this.proxyPort, "proxy"]
+    ];
+    for (const [port, role] of portRoles) {
+      let occupantPids = [];
       try {
-        const pids = execSync(`lsof -ti :${port}`, { encoding: "utf-8" }).trim();
-        if (!pids)
-          continue;
-        const pidList = pids.split(`
-`).map((p) => p.trim()).filter(Boolean);
-        const staleCodexPids = [];
-        const foreignPids = [];
-        for (const pid of pidList) {
-          try {
-            const cmdline = execSync(`ps -p ${pid} -o args=`, { encoding: "utf-8" }).trim();
-            if (cmdline.includes("codex") && cmdline.includes("app-server")) {
-              staleCodexPids.push(pid);
-            } else {
-              foreignPids.push(pid);
-            }
-          } catch {}
-        }
-        if (staleCodexPids.length > 0) {
-          this.log(`Cleaning up stale codex app-server on port ${port}: PID(s) ${staleCodexPids.join(", ")}`);
-          for (const pid of staleCodexPids) {
-            try {
-              execSync(`kill ${pid}`, { encoding: "utf-8" });
-            } catch {}
-          }
-          await new Promise((r) => setTimeout(r, 500));
-        }
-        if (foreignPids.length > 0) {
-          throw new Error(`Port ${port} is already in use by non-Codex process(es): PID(s) ${foreignPids.join(", ")}. ` + `Please stop the process or set a different port via ${port === this.appPort ? "CODEX_WS_PORT" : "CODEX_PROXY_PORT"} env var.`);
-        }
+        const out = execSync(`lsof -tiTCP:${port} -sTCP:LISTEN`, { encoding: "utf-8" }).trim();
+        occupantPids = out ? out.split(`
+`).map((p) => Number.parseInt(p.trim(), 10)).filter((n) => Number.isFinite(n)) : [];
+      } catch {
+        occupantPids = [];
+      }
+      for (const pid of occupantPids) {
+        let cmdline = "";
         try {
-          const remaining = execSync(`lsof -ti :${port}`, { encoding: "utf-8" }).trim();
-          if (remaining) {
-            throw new Error(`Port ${port} is still occupied (PID(s): ${remaining.replace(/\n/g, ", ")}) after cleanup. ` + `Please stop the process or set a different port via ${port === this.appPort ? "CODEX_WS_PORT" : "CODEX_PROXY_PORT"} env var.`);
-          }
-        } catch (err) {
-          if (err.message?.includes("Port"))
-            throw err;
+          cmdline = execSync(`ps -p ${pid} -o args=`, { encoding: "utf-8" }).trim();
+        } catch {
+          continue;
         }
-      } catch (err) {
-        if (err.message?.includes("Port") || err.message?.includes("non-Codex"))
-          throw err;
+        const occupantIsCodexAppServer = cmdline.includes("codex") && cmdline.includes("app-server");
+        const action = decidePortAction({ role, occupantPid: pid, occupantIsCodexAppServer, recordedAppServerPid, isDefault });
+        if (action === "kill") {
+          this.log(`checkPorts: reclaiming ${role} port ${port} \u2014 killing recorded/stale codex app-server pid ${pid}`);
+          try {
+            execSync(`kill ${pid}`, { encoding: "utf-8" });
+          } catch {}
+          await new Promise((r) => setTimeout(r, 500));
+        } else if (action === "block") {
+          throw new BlockedPortError(port, role, `Port ${port} (${role}) is occupied by pid ${pid} ` + `(${occupantIsCodexAppServer ? `a codex app-server NOT owned by channel '${this.channelId}'` : "a foreign process"}); ` + `refusing to kill. Stop it or use a different ${role === "app" ? "CODEX_WS_PORT" : "CODEX_PROXY_PORT"}.`);
+        }
       }
     }
   }
@@ -1316,7 +1753,7 @@ class TuiConnectionState {
 
 // src/daemon-lifecycle.ts
 import { spawn as spawn2, execFileSync } from "child_process";
-import { existsSync as existsSync2, readFileSync, unlinkSync, writeFileSync, openSync, closeSync, constants } from "fs";
+import { existsSync as existsSync2, readFileSync as readFileSync2, unlinkSync, writeFileSync, openSync, closeSync, constants } from "fs";
 import { fileURLToPath } from "url";
 function resolveDaemonPath(baseUrl = import.meta.url, override = process.env.AGENTBRIDGE_DAEMON_ENTRY) {
   const base = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl;
@@ -1339,10 +1776,16 @@ class DaemonLifecycle {
   stateDir;
   controlPort;
   log;
+  channelEnv;
   constructor(opts) {
     this.stateDir = opts.stateDir;
     this.controlPort = opts.controlPort;
     this.log = opts.log;
+    this.channelEnv = opts.channelEnv ?? {};
+    assertChannelEnvConsistent(this.channelEnv, {
+      AGENTBRIDGE_CONTROL_PORT: String(this.controlPort),
+      AGENTBRIDGE_STATE_DIR: this.stateDir.dir
+    }, "DaemonLifecycle");
   }
   get healthUrl() {
     return `http://127.0.0.1:${this.controlPort}/healthz`;
@@ -1394,6 +1837,24 @@ class DaemonLifecycle {
       return false;
     }
   }
+  async verifyChannelIdentity(context, expectedPid) {
+    const expectedChannelId = this.channelEnv.AGENTBRIDGE_CHANNEL_ID;
+    if (!expectedChannelId || expectedChannelId === "default")
+      return;
+    let health;
+    try {
+      const res = await fetch(this.healthUrl);
+      health = await res.json();
+    } catch (err) {
+      throw new Error(`[${context}] channel '${expectedChannelId}' identity check failed: daemon unreachable on ${this.healthUrl}: ${err.message}`);
+    }
+    if (health.channelId !== expectedChannelId || health.controlPort !== this.controlPort) {
+      throw new Error(`[${context}] channel identity mismatch: expected {channelId:'${expectedChannelId}',controlPort:${this.controlPort}} but daemon reports {channelId:'${health.channelId}',controlPort:${health.controlPort}} \u2014 refusing to proceed`);
+    }
+    if (expectedPid !== undefined && health.pid !== expectedPid) {
+      throw new Error(`[${context}] channel identity pid mismatch: expected pid ${expectedPid} but daemon /healthz reports pid ${health.pid} \u2014 refusing`);
+    }
+  }
   async waitForHealthy(maxRetries = 40, delayMs = 250) {
     for (let attempt = 0;attempt < maxRetries; attempt++) {
       if (await this.isHealthy())
@@ -1420,7 +1881,7 @@ class DaemonLifecycle {
   }
   readStatus() {
     try {
-      const raw = readFileSync(this.stateDir.statusFile, "utf-8");
+      const raw = readFileSync2(this.stateDir.statusFile, "utf-8");
       return JSON.parse(raw);
     } catch {
       return null;
@@ -1433,7 +1894,7 @@ class DaemonLifecycle {
   }
   readPid() {
     try {
-      const raw = readFileSync(this.stateDir.pidFile, "utf-8").trim();
+      const raw = readFileSync2(this.stateDir.pidFile, "utf-8").trim();
       if (!raw)
         return null;
       const pid = Number.parseInt(raw, 10);
@@ -1477,6 +1938,7 @@ class DaemonLifecycle {
       cwd: process.cwd(),
       env: {
         ...process.env,
+        ...this.channelEnv,
         AGENTBRIDGE_CONTROL_PORT: String(this.controlPort),
         AGENTBRIDGE_STATE_DIR: this.stateDir.dir
       },
@@ -1504,7 +1966,7 @@ class DaemonLifecycle {
     } catch (err) {
       if (err.code === "EEXIST") {
         try {
-          const holderPid = Number.parseInt(readFileSync(this.stateDir.lockFile, "utf-8").trim(), 10);
+          const holderPid = Number.parseInt(readFileSync2(this.stateDir.lockFile, "utf-8").trim(), 10);
           if (Number.isFinite(holderPid) && !isProcessAlive(holderPid)) {
             this.log(`Stale lock file from dead process ${holderPid}, removing`);
             this.releaseLock();
@@ -1543,6 +2005,13 @@ class DaemonLifecycle {
       this.cleanup();
       return false;
     }
+    try {
+      await this.verifyChannelIdentity("kill", pid);
+    } catch (err) {
+      this.log(err.message);
+      return false;
+    }
+    this.markKilled();
     this.log(`Sending SIGTERM to daemon pid ${pid}`);
     try {
       process.kill(pid, "SIGTERM");
@@ -1590,7 +2059,7 @@ function isProcessAlive(pid) {
 }
 
 // src/config-service.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync2, mkdirSync as mkdirSync2, existsSync as existsSync3 } from "fs";
+import { readFileSync as readFileSync3, writeFileSync as writeFileSync2, mkdirSync as mkdirSync2, existsSync as existsSync3 } from "fs";
 import { join as join2 } from "path";
 var DEFAULT_CONFIG = {
   version: "1.0",
@@ -1651,7 +2120,7 @@ class ConfigService {
   }
   load() {
     try {
-      const raw = readFileSync2(this.configPath, "utf-8");
+      const raw = readFileSync3(this.configPath, "utf-8");
       return normalizeConfig(JSON.parse(raw));
     } catch {
       return null;
@@ -1695,6 +2164,8 @@ var config = configService.loadOrDefault();
 var CODEX_APP_PORT = parseInt(process.env.CODEX_WS_PORT ?? String(config.codex.appPort), 10);
 var CODEX_PROXY_PORT = parseInt(process.env.CODEX_PROXY_PORT ?? String(config.codex.proxyPort), 10);
 var CONTROL_PORT = parseInt(process.env.AGENTBRIDGE_CONTROL_PORT ?? "4502", 10);
+var CHANNEL_ID = process.env.AGENTBRIDGE_CHANNEL_ID ?? "default";
+var CHANNEL_TAG = channelMessagePrefix(CHANNEL_ID);
 var TUI_DISCONNECT_GRACE_MS = parseInt(process.env.TUI_DISCONNECT_GRACE_MS ?? "2500", 10);
 var CLAUDE_DISCONNECT_GRACE_MS = 5000;
 var MAX_BUFFERED_MESSAGES = parseInt(process.env.AGENTBRIDGE_MAX_BUFFERED_MESSAGES ?? "100", 10);
@@ -1703,7 +2174,17 @@ var IDLE_SHUTDOWN_MS = parseInt(process.env.AGENTBRIDGE_IDLE_SHUTDOWN_MS ?? Stri
 var ATTENTION_WINDOW_MS = parseInt(process.env.AGENTBRIDGE_ATTENTION_WINDOW_MS ?? String(config.turnCoordination.attentionWindowSeconds * 1000), 10);
 var PROTOCOL_VERSION = 1;
 var daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
-var codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile);
+var codexAppServerPid = null;
+var blockedPort = null;
+var codex = new CodexAdapter(CODEX_APP_PORT, CODEX_PROXY_PORT, stateDir.logFile, {
+  channelEnv: channelEnvFromProcessEnv(),
+  statusFile: stateDir.statusFile,
+  channelId: CHANNEL_ID,
+  onAppServerSpawned: (pid) => {
+    codexAppServerPid = pid;
+    writeStatusFile();
+  }
+});
 var attachCmd = `codex --enable tui_app_server --remote ${codex.proxyUrl}`;
 var controlServer = null;
 var attachedClaude = null;
@@ -2329,15 +2810,19 @@ function currentStatus() {
     queuedMessageCount: bufferedMessages.length + statusBuffer.size,
     proxyUrl: codex.proxyUrl,
     appServerUrl: codex.appServerUrl,
-    pid: process.pid
+    pid: process.pid,
+    channelId: CHANNEL_ID,
+    controlPort: CONTROL_PORT,
+    codexAppServerPid,
+    blockedPort
   };
 }
 function currentWaitingMessage() {
-  return `\u23F3 Waiting for Codex TUI to connect. Run in another terminal:
+  return `${CHANNEL_TAG}\u23F3 Waiting for Codex TUI to connect. Run in another terminal:
 ${attachCmd}`;
 }
 function currentReadyMessage() {
-  return `\u2705 Codex TUI connected (${codex.activeThreadId}). Bridge ready.`;
+  return `${CHANNEL_TAG}\u2705 Codex TUI connected (${codex.activeThreadId}). Bridge ready.`;
 }
 function notifyCodexClaudeOnline() {
   claudeOnlineNoticeSent = true;
@@ -2363,10 +2848,13 @@ function removePidFile() {
 }
 function writeStatusFile() {
   daemonLifecycle.writeStatus({
+    channelId: CHANNEL_ID,
     proxyUrl: codex.proxyUrl,
     appServerUrl: codex.appServerUrl,
     controlPort: CONTROL_PORT,
-    pid: process.pid
+    pid: process.pid,
+    codexAppServerPid,
+    blockedPort
   });
 }
 function removeStatusFile() {
@@ -2385,6 +2873,10 @@ async function bootCodex() {
     broadcastStatus();
   } catch (err) {
     log(`Failed to start Codex: ${err.message}`);
+    if (err instanceof BlockedPortError) {
+      blockedPort = { port: err.port, role: err.portRole, message: err.message };
+      writeStatusFile();
+    }
     emitToClaude(systemMessage("system_codex_start_failed", `\u274C AgentBridge failed to start Codex app-server: ${err.message}`));
     broadcastStatus();
   }
@@ -2404,7 +2896,7 @@ function shutdown(reason) {
   process.exit(0);
 }
 function log(msg) {
-  const line = `[${new Date().toISOString()}] [AgentBridgeDaemon] ${msg}
+  const line = `[${new Date().toISOString()}] [AgentBridgeDaemon][channel:${CHANNEL_ID}] ${msg}
 `;
   process.stderr.write(line);
   try {
