@@ -80,24 +80,22 @@ function formatDrainTimeoutWarning(entryCount: number): string {
 export type PortRole = "app" | "proxy";
 export type PortAction = "free" | "kill" | "block";
 
-/** Channel-scoped port decision (PR4 契约8). The proxy port hosts the daemon's own
- *  server (not a codex child) → never kill. App port: a NAMED channel kills ONLY the
- *  recorded codex app-server pid (never a neighbor); the legacy `default` channel
- *  broad-cleans ANY codex app-server regardless of recorded pid (字面零回归 = pre-PR4). */
+/** Channel-scoped port decision (PR4 契约8; hardened 2026-07). The proxy port hosts
+ *  the daemon's own server (not a codex child) → never kill. App port: kill ONLY the
+ *  recorded codex app-server pid — for named AND default channels alike. Until
+ *  2026-07 `default` broad-cleaned ANY codex app-server on the app port (pre-PR4
+ *  zero-regression concession); that could murder a foreign codex app-server that
+ *  merely bound the port. Now an unrecorded/mismatched occupant blocks (fail closed,
+ *  surfaced via BlockedPortError → healthz blockedPort) instead of being killed. */
 export function decidePortAction(opts: {
   role: PortRole;
   occupantPid: number | null;
   occupantIsCodexAppServer: boolean;
   recordedAppServerPid: number | null;
-  isDefault: boolean;
 }): PortAction {
   if (opts.occupantPid === null) return "free";
   if (opts.role === "proxy") return "block";
   if (!opts.occupantIsCodexAppServer) return "block";
-  // default: legacy broad-cleanup of ANY codex app-server on the app port (字面零回归 —
-  // pre-PR4 behavior never consulted a recorded pid). recorded pid is irrelevant here.
-  if (opts.isDefault) return "kill";
-  // named: kill ONLY the recorded pid; never fallback-kill a neighbor channel's server.
   if (opts.recordedAppServerPid !== null) {
     return opts.occupantPid === opts.recordedAppServerPid ? "kill" : "block";
   }
@@ -1352,7 +1350,7 @@ export class CodexAdapter extends EventEmitter {
           continue; // process vanished between lsof and ps
         }
         const occupantIsCodexAppServer = cmdline.includes("codex") && cmdline.includes("app-server");
-        const action = decidePortAction({ role, occupantPid: pid, occupantIsCodexAppServer, recordedAppServerPid, isDefault });
+        const action = decidePortAction({ role, occupantPid: pid, occupantIsCodexAppServer, recordedAppServerPid });
         if (action === "kill") {
           this.log(`checkPorts: reclaiming ${role} port ${port} — killing recorded/stale codex app-server pid ${pid}`);
           try { execSync(`kill ${pid}`, { encoding: "utf-8" }); } catch {}

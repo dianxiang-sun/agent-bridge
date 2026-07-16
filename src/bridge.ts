@@ -27,6 +27,12 @@ const daemonLifecycle = new DaemonLifecycle({
 });
 const CONTROL_WS_URL = daemonLifecycle.controlWsUrl;
 
+// Snapshot of the Claude launch generation this frontend was born under
+// (`agentbridge claude` bumps it right before spawning us). If a NEWER frontend
+// launches while we sit in disabled-state recovery, the file moves past ours and
+// we stand down permanently instead of racing it for the single Claude slot.
+const myClaudeLaunchGeneration = daemonLifecycle.readClaudeLaunchGeneration();
+
 const claude = new ClaudeAdapter(stateDir.logFile);
 const daemonClient = new DaemonClient(CONTROL_WS_URL);
 
@@ -283,6 +289,18 @@ async function pollDisabledRecovery() {
 
   disabledRecoveryInFlight = true;
   try {
+    const currentGeneration = daemonLifecycle.readClaudeLaunchGeneration();
+    if (currentGeneration !== myClaudeLaunchGeneration) {
+      log(`Disabled-state recovery standing down: a newer Claude frontend launched (generation ${currentGeneration ?? "none"}, ours ${myClaudeLaunchGeneration ?? "none"})`);
+      daemonDisabledReason = "superseded";
+      stopDisabledRecoveryPoller();
+      void claude.pushNotification(systemMessage(
+        "system_bridge_superseded",
+        "⚠️ AgentBridge: a newer Claude session took over this channel; this session's bridge stays disconnected. Use the newer session, or restart this one to take the channel back.",
+      ));
+      return;
+    }
+
     if (daemonLifecycle.wasKilled()) {
       return;
     }

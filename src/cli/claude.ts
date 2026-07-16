@@ -31,6 +31,10 @@ export async function runClaude(args: string[]) {
     log: (msg) => console.error(`[agentbridge] ${msg}`),
   });
 
+  // Bump BEFORE clearKilled(): older frontends' recovery pollers key off the
+  // generation, so bumping first closes the window where a poller could see
+  // "sentinel gone" before it sees "superseded" and steal the Claude slot.
+  lifecycle.bumpClaudeLaunchGeneration();
   lifecycle.clearKilled();
 
   // Channel entry format: "server:<mcp-server-name>" for MCP-based channels,

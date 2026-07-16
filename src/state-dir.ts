@@ -70,4 +70,11 @@ export class StateDirResolver {
   get killedFile(): string {
     return join(this.stateDir, "killed");
   }
+
+  /** Claude-frontend launch generation: bumped by `agentbridge claude` before each
+   *  spawn so an OLDER frontend's disabled-state recovery poller can detect it was
+   *  superseded and stand down instead of racing for the single Claude slot. */
+  get claudeLaunchGenerationFile(): string {
+    return join(this.stateDir, "claude-launch.generation");
+  }
 }

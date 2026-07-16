@@ -279,30 +279,24 @@ describe("channelMessagePrefix (Task 4.2 — default 零回归)", () => {
   });
 });
 
-describe("decidePortAction (Task 4.4 契约8 — checkPorts channel-scoped)", () => {
-  const codexBase = { occupantIsCodexAppServer: true, recordedAppServerPid: 123, isDefault: false };
+describe("decidePortAction (Task 4.4 契约8 — checkPorts channel-scoped; 2026-07 hardened: default no longer broad-kills)", () => {
+  const codexBase = { occupantIsCodexAppServer: true, recordedAppServerPid: 123 };
   test("free port → free", () => {
-    expect(decidePortAction({ role: "app", occupantPid: null, occupantIsCodexAppServer: false, recordedAppServerPid: null, isDefault: false })).toBe("free");
+    expect(decidePortAction({ role: "app", occupantPid: null, occupantIsCodexAppServer: false, recordedAppServerPid: null })).toBe("free");
   });
   test("proxy port occupied → block (proxy 是 daemon 自己的 server，绝不杀)", () => {
     expect(decidePortAction({ ...codexBase, role: "proxy", occupantPid: 123 })).toBe("block");
   });
-  test("app named: occupant == recorded codex app-server → kill", () => {
+  test("app: occupant == recorded codex app-server → kill(named 与 default 同一规则)", () => {
     expect(decidePortAction({ ...codexBase, role: "app", occupantPid: 123 })).toBe("kill");
   });
-  test("app named: occupant != recorded → block (不跨通道泛杀邻居)", () => {
+  test("app: occupant != recorded → block (不泛杀邻居/外来 codex app-server)", () => {
     expect(decidePortAction({ ...codexBase, role: "app", occupantPid: 999 })).toBe("block");
   });
-  test("app named: no recorded pid → block (named 绝不 fallback broad-kill)", () => {
+  test("app: no recorded pid → block (无可验证 owner 一律 fail closed,default 不再 broad-kill)", () => {
     expect(decidePortAction({ ...codexBase, role: "app", occupantPid: 123, recordedAppServerPid: null })).toBe("block");
   });
-  test("app default: no recorded pid + codex app-server → kill (legacy cleanup 零回归)", () => {
-    expect(decidePortAction({ role: "app", occupantPid: 123, occupantIsCodexAppServer: true, recordedAppServerPid: null, isDefault: true })).toBe("kill");
-  });
-  test("app default: recorded but DIFFERENT codex app-server pid → kill (字面零回归 broad-cleanup,无视 recorded)", () => {
-    expect(decidePortAction({ role: "app", occupantPid: 999, occupantIsCodexAppServer: true, recordedAppServerPid: 123, isDefault: true })).toBe("kill");
-  });
   test("app: foreign (non-codex) process → block", () => {
-    expect(decidePortAction({ role: "app", occupantPid: 123, occupantIsCodexAppServer: false, recordedAppServerPid: null, isDefault: true })).toBe("block");
+    expect(decidePortAction({ role: "app", occupantPid: 123, occupantIsCodexAppServer: false, recordedAppServerPid: null })).toBe("block");
   });
 });
