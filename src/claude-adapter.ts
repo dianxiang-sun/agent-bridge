@@ -20,7 +20,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { appendFileSync } from "node:fs";
+import { appendLogRotated } from "./log-rotation";
 import { StateDirResolver } from "./state-dir";
 import type { BridgeMessage } from "./types";
 import type { AskCodexCompletionSignal, AskCodexOutcome, AskCodexResult } from "./control-protocol";
@@ -525,8 +525,6 @@ export class ClaudeAdapter extends EventEmitter {
   private log(msg: string) {
     const line = `[${new Date().toISOString()}] [ClaudeAdapter] ${msg}\n`;
     process.stderr.write(line);
-    try {
-      appendFileSync(this.logFile, line);
-    } catch {}
+    appendLogRotated(this.logFile, line);
   }
 }

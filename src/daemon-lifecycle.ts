@@ -288,6 +288,18 @@ export class DaemonLifecycle {
     }
   }
 
+  /** Current control-socket token (written 0600 by the daemon at each start),
+   *  or null when unreadable. A client then connects without one: an old daemon
+   *  accepts that; a new daemon rejects the upgrade and the error surfaces. */
+  readControlToken(): string | null {
+    try {
+      const value = readFileSync(this.stateDir.controlTokenFile, "utf-8").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Launch daemon as detached background process. */
   private launch(): void {
     this.stateDir.ensure();

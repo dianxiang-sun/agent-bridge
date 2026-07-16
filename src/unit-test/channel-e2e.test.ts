@@ -312,7 +312,9 @@ async function fakeTuiHandshake(h: DaemonHandle): Promise<WebSocket> {
 /** Connect a fake Claude to the control port, attach, and send one claude_to_codex carrying `content`.
  *  Asserts the daemon accepted it (claude_to_codex_result.success). */
 async function fakeClaudeSend(h: DaemonHandle, content: string): Promise<void> {
-  const ws = new WebSocket(`ws://127.0.0.1:${h.controlPort}/ws`);
+  // The control /ws upgrade requires the daemon's current token (anti-CSWSH).
+  const token = readFileSync(join(h.base, "state", "control.token"), "utf-8").trim();
+  const ws = new WebSocket(`ws://127.0.0.1:${h.controlPort}/ws?token=${encodeURIComponent(token)}`);
   openSockets.push(ws);
   await wsOpen(ws);
 

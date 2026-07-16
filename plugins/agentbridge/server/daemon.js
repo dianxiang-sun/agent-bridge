@@ -2,13 +2,31 @@
 // @bun
 
 // src/daemon.ts
-import { appendFileSync as appendFileSync2 } from "fs";
+import { chmodSync, writeFileSync as writeFileSync3 } from "fs";
+import { randomUUID as randomUUID2 } from "crypto";
+
+// src/log-rotation.ts
+import { appendFileSync, renameSync, statSync } from "fs";
+var DEFAULT_MAX_BYTES = (() => {
+  const parsed = parseInt(process.env.AGENTBRIDGE_LOG_MAX_BYTES ?? "", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 5 * 1024 * 1024;
+})();
+function appendLogRotated(file, line, maxBytes = DEFAULT_MAX_BYTES) {
+  try {
+    try {
+      if (statSync(file).size + line.length > maxBytes) {
+        renameSync(file, `${file}.1`);
+      }
+    } catch {}
+    appendFileSync(file, line);
+  } catch {}
+}
 
 // src/codex-adapter.ts
 import { spawn, execSync } from "child_process";
 import { createInterface } from "readline";
 import { EventEmitter } from "events";
-import { appendFileSync, readFileSync } from "fs";
+import { readFileSync } from "fs";
 
 // src/state-dir.ts
 import { mkdirSync, existsSync } from "fs";
@@ -62,6 +80,9 @@ class StateDirResolver {
   }
   get claudeLaunchGenerationFile() {
     return join(this.stateDir, "claude-launch.generation");
+  }
+  get controlTokenFile() {
+    return join(this.stateDir, "control.token");
   }
 }
 
@@ -820,6 +841,11 @@ class CodexAdapter extends EventEmitter {
         const url = new URL(req.url);
         const isUpgrade = req.headers.get("upgrade")?.toLowerCase() === "websocket";
         self.log(`HTTP ${req.method} ${url.pathname} (upgrade=${isUpgrade})`);
+        const origin = req.headers.get("origin");
+        if (origin !== null) {
+          self.log(`Rejecting proxy request carrying a browser Origin header (${origin})`);
+          return new Response("browser origins are not allowed", { status: 403 });
+        }
         if (url.pathname === "/healthz" || url.pathname === "/readyz") {
           return fetch(`http://127.0.0.1:${self.appPort}${url.pathname}`);
         }
@@ -1545,9 +1571,7 @@ class CodexAdapter extends EventEmitter {
     const line = `[${new Date().toISOString()}] [CodexAdapter] ${msg}
 `;
     process.stderr.write(line);
-    try {
-      appendFileSync(this.logFile, line);
-    } catch {}
+    appendLogRotated(this.logFile, line);
   }
 }
 
@@ -1948,6 +1972,14 @@ class DaemonLifecycle {
       return null;
     }
   }
+  readControlToken() {
+    try {
+      const value = readFileSync2(this.stateDir.controlTokenFile, "utf-8").trim();
+      return value || null;
+    } catch {
+      return null;
+    }
+  }
   launch() {
     this.stateDir.ensure();
     this.log(`Launching detached daemon on control port ${this.controlPort}`);
@@ -2188,6 +2220,7 @@ var CLAUDE_DISCONNECT_GRACE_MS = 5000;
 var MAX_BUFFERED_MESSAGES = parseInt(process.env.AGENTBRIDGE_MAX_BUFFERED_MESSAGES ?? "100", 10);
 var FILTER_MODE = process.env.AGENTBRIDGE_FILTER_MODE === "full" ? "full" : "filtered";
 var IDLE_SHUTDOWN_MS = parseInt(process.env.AGENTBRIDGE_IDLE_SHUTDOWN_MS ?? String(config.idleShutdownSeconds * 1000), 10);
+var CONTROL_TOKEN = randomUUID2();
 var ATTENTION_WINDOW_MS = parseInt(process.env.AGENTBRIDGE_ATTENTION_WINDOW_MS ?? String(config.turnCoordination.attentionWindowSeconds * 1000), 10);
 var PROTOCOL_VERSION = 1;
 var daemonLifecycle = new DaemonLifecycle({ stateDir, controlPort: CONTROL_PORT, log });
@@ -2340,6 +2373,14 @@ codex.on("exit", (code) => {
   broadcastStatus();
 });
 function startControlServer() {
+  try {
+    writeFileSync3(stateDir.controlTokenFile, `${CONTROL_TOKEN}
+`, { mode: 384 });
+    chmodSync(stateDir.controlTokenFile, 384);
+  } catch (err) {
+    log(`FATAL: cannot write control token file: ${err.message}`);
+    process.exit(1);
+  }
   controlServer = Bun.serve({
     port: CONTROL_PORT,
     hostname: "127.0.0.1",
@@ -2351,8 +2392,19 @@ function startControlServer() {
       if (url.pathname === "/readyz") {
         return Response.json(currentStatus(), { status: codexBootstrapped ? 200 : 503 });
       }
-      if (url.pathname === "/ws" && server.upgrade(req, { data: { clientId: 0, attached: false } })) {
-        return;
+      if (url.pathname === "/ws") {
+        const origin = req.headers.get("origin");
+        if (origin !== null) {
+          log(`Rejecting /ws upgrade carrying a browser Origin header (${origin})`);
+          return new Response("browser origins are not allowed", { status: 403 });
+        }
+        if (url.searchParams.get("token") !== CONTROL_TOKEN) {
+          log("Rejecting /ws upgrade: missing/stale control token (restart agentbridge clients so they read the current token)");
+          return new Response("control token mismatch \u2014 restart your agentbridge clients", { status: 403 });
+        }
+        if (server.upgrade(req, { data: { clientId: 0, attached: false } })) {
+          return;
+        }
       }
       return new Response("AgentBridge daemon");
     },
@@ -2917,9 +2969,7 @@ function log(msg) {
   const line = `[${new Date().toISOString()}] [AgentBridgeDaemon][channel:${CHANNEL_ID}] ${msg}
 `;
   process.stderr.write(line);
-  try {
-    appendFileSync2(stateDir.logFile, line);
-  } catch {}
+  appendLogRotated(stateDir.logFile, line);
 }
 var originalInjectMessage = codex.injectMessage.bind(codex);
 var __daemonTest = {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { appendFileSync } from "node:fs";
+import { appendLogRotated } from "./log-rotation";
 import { ClaudeAdapter } from "./claude-adapter";
 import { DaemonClient } from "./daemon-client";
 import { DaemonLifecycle } from "./daemon-lifecycle";
@@ -34,7 +34,12 @@ const CONTROL_WS_URL = daemonLifecycle.controlWsUrl;
 const myClaudeLaunchGeneration = daemonLifecycle.readClaudeLaunchGeneration();
 
 const claude = new ClaudeAdapter(stateDir.logFile);
-const daemonClient = new DaemonClient(CONTROL_WS_URL);
+// tokenProvider reads fresh on every connect: the daemon regenerates its
+// control token at each start, so a static snapshot would go stale across
+// daemon restarts (exactly when reconnects happen).
+const daemonClient = new DaemonClient(CONTROL_WS_URL, {
+  tokenProvider: () => daemonLifecycle.readControlToken(),
+});
 
 let shuttingDown = false;
 let daemonDisabled = false;
@@ -403,9 +408,7 @@ process.on("unhandledRejection", (reason: any) => {
 function log(msg: string) {
   const line = `[${new Date().toISOString()}] [AgentBridgeFrontend] ${msg}\n`;
   process.stderr.write(line);
-  try {
-    appendFileSync(stateDir.logFile, line);
-  } catch {}
+  appendLogRotated(stateDir.logFile, line);
 }
 
 log(`Starting AgentBridge frontend (daemon ws ${CONTROL_WS_URL})`);
