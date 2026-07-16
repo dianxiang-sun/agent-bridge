@@ -4,8 +4,9 @@
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
 > **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.9,2026-07-15)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> ⚠**CURRENT LIVE ENTRYPOINT = §J.1**(2026-07-15)。下会话激活唯一入口是 **§J**;**§A/§B/§C/§D/§E/§H/§I 的状态与行动段均为 v0.5 时点历史快照**(其中 D-1..D-6"待决"、attention/verification"未机制化"、工作分支"feat/ops-hardening"等均已被 §J.2/§J.3 + architecture 推翻),以及下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
-> **恢复顺序(现行)**:直接读 §J(§J.1 激活 → §J.2 DONE → §J.3 待办 → §J.4 正式 apply 候选 → §J.5 教训),§J 会指引读设计文档哪些节。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G 仍有效。
+> ⚠**CURRENT LIVE ENTRYPOINT = §N.1**(2026-07-16 会话 8 收尾起;**spec arc 已完成——Chunk 7 CLOSED,剩余全部为用户 APPLY/授权事项**)。下会话激活唯一入口是 **§N**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v5**);**§A–§M 的状态与行动段均为历史快照**(§M 为会话 7 时点,已被 §N supersede;§M 内引的「激活入口 v4」亦 SUPERSEDED),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
+> **恢复顺序(现行)**:直接读 §N(§N.1 激活 → §N.2 DONE → §N.3 待用户清单 → §N.4 教训;**§K.4 授权口径与 §K.5/§L.4/§M.4 教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除 §J.5/§K/§L/§M/§N 明示替换处)仍有效。
+> ~~恢复顺序(§J 时点,SUPERSEDED by §K,勿执行):读 §J(§J.1→§J.5)~~
 > ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
 ---
@@ -295,13 +296,13 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 需求澄清 → brainstorming → 现状调研 → 轮1 独立分析(确立全局 MCP)→ 轮2 收敛+红队(定 B′,发现审批 principal blocker)→ 轮3 盲区狩猎(双路清单对撞,定 5 invariant)→ 轮4 究极决策(steelman 幻影需求→修正低频真实,核实 Codex 插件+mcp-server,定 manual_claim_current,签 B″)→ 用户问"新增什么功能" → 用户问"B 缺口/C 为何最全/有无最优解"(答 Pareto,B″)→ 用户要整合文档 → v0.1 → 轮5 全文评审 → v0.2 → 轮6 定向终审 → v0.3 → 轮7 同范围复核 → v0.4(一度 REVIEWED)→ 用户要究极复审 → 轮8 三路复审翻案 → v0.5(DRAFT)→ 用户选"下会话继续"+ 要交接 → 轮9 交接复审 → 本文。
 
-## J. 会话 3+4 收尾(2026-07-15)— D-4 裁决 + 定案轮 + v0.6 APPLY + v0.6→v0.9 全量终审【最新 LIVE 段】
+## J. 会话 3+4 收尾(2026-07-15)— D-4 裁决 + 定案轮 + v0.6 APPLY + v0.6→v0.9 全量终审 ⚠SUPERSEDED BY §K(2026-07-15 会话 5;§F/§G 与 §J.5 教训除明示替换处继续有效)
 
-> **SSOT 声明**:docs/v3-HANDOFF.md 为本 arc 唯一操作性交接文件。**本 §J 是唯一 live 段,下会话激活唯一入口=§J.1**;§H、§I.1、文件顶部旧「恢复顺序」均 SUPERSEDED,勿执行。§I.3 **仅其证据引文/SHA 有效,其 D-1..D-6 OPEN/status 判断已被 §J+architecture supersede**;§I.6b 五仓 pinned SHA、§F/§G(除本 §J 明示替换处)继续有效。
+> **SSOT 声明**:docs/v3-HANDOFF.md 为本 arc 唯一操作性交接文件。**⚠本 §J 已 SUPERSEDED BY §K(唯一 live 段=§K,激活入口=§K.1),勿按本段行动**;§H、§I.1、文件顶部旧「恢复顺序」均 SUPERSEDED,勿执行。§I.3 **仅其证据引文/SHA 有效,其 D-1..D-6 OPEN/status 判断已被 §J+architecture supersede**;§I.6b 五仓 pinned SHA、§F/§G(除本 §J 明示替换处)继续有效。
 > **precedence(按信息类型分)**:决策/设计=用户最新明确裁决 > docs/v3-architecture.md 设计 SSOT > 本 handoff 摘要;操作激活=§J > §I/§H/顶部旧恢复段;调研事实=docs/v3-survey-evidence.md pinned 证据(不覆盖设计裁决)。
 > 写于 2026-07-15 · 一句话:D-4 用户终裁 + D-1/2/3/5/6+MCP Tasks 定案(Codex 4 轮盲审)→ v0.6 落稿 APPLY → 全量多维终审(6 维度 agent + Codex 3 轮差分)补修至 **v0.9,Codex 三路独立 APPROVE=架构正文层可定稿**。
 
-### J.1 激活(下会话第一步;§H/§I.1/顶部旧恢复段勿执行)
+### J.1 激活 ⚠SUPERSEDED BY §K.1(勿执行——历史;§H/§I.1/顶部旧恢复段同为历史)
 
 ```
 接续 /Users/ds/code/agent-bridge 的 AgentBridge v3 arc。设计已定稿到 DRAFT v0.9(架构正文层,Codex 三路 APPROVE),
@@ -403,3 +404,159 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 | docs/v3-HANDOFF.md | 本文件(含本 §J live 段) | green(落盘完成) |
 | memory agentbridge-v3-design-arc.md / MEMORY.md | arc 记忆(已真同步 v0.9) | green |
 | Claude 临时(/private/tmp/.../scratchpad/,易失非权威):v0.6-final.md、v0.6-diff-proposal.md、v0.6-diff-proposal-v2.md、v0.6-diff-proposal-v2.1-delta.md、-v2.2-delta.md、-v2.3-delta.md、handoff-J-final.md | 定案轮提案史 + 本 §J 草稿 | 易失,下会话不保证存在;权威=repo commits + docs 正文 |
+
+---
+
+## K. 会话 5 收尾(2026-07-15)—「正式 apply」阶段:§0-A wire 协议规格起草 ⚠SUPERSEDED BY §L(§K.4 授权口径与 §K.5 教训继续有效)
+
+> **SSOT 声明(历史)**:本 §K 曾为 live 段;现行 live 段=§L。
+> **分层 SSOT**:架构=`docs/v3-architecture.md`(DRAFT v0.9,fec2285);**协议规格=`docs/v3-protocol-spec.md`(DRAFT v0.7.2,本会话经用户 APPLY「落盘」写入,与 `docs/gen_golden_vectors.py` 一起未 commit)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(14+ 轮 Codex 台账/Chunk 7 待办+P2 追溯矩阵/下会话激活指令,唯一激活入口,此处不复制防漂移)。
+> 写于 2026-07-15 · 一句话:范围裁决(双路收敛,正式执行仅②§0-A 规格)→ spec Chunk 0+1 八轮对抗至 Codex 全路 APPROVE 定稿 → Chunk 2 五轮对抗高收敛 → 用户 APPLY 落盘 → 轮 14/14b 交接审计补修至 **v0.7.2**(N1-N5 待正式复核;N6=tombstone 正交化为封版 blocker)。
+
+### K.1 激活(下会话第一步)
+
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口)」段并按其执行(唯一入口)。
+
+### K.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | 范围裁决(双路独立→收敛):正式执行={②§0-A 规格};①治理=备忘录级(未做)③E2E=纸面探测包并入④不启动;禁区口径=Codex 任质量审核关,repo 写入/Git 写仍只认用户本人 APPLY | ledger Phase B;Codex chat v3-apply-r1-scope | 双路收敛 |
+| 2 | **spec Chunk 0+1 定稿(Codex 轮 8 全路 APPROVE)**:§1 规范体系(NORMATIVE/E2E-GATED/USER-DECISION/G5-GATED/UNSUPPORTED 标签)+AB-CANON-1;§2 UDS+NDJSON-JSONRPC framing/握手/HandshakeProof/protocol feature 与 effectiveCapabilities 两层+authorize() 单一授权面;§3 sessionAuth;§4 四层身份+commitRegistration(RegistrationDecision/CredentialDelivery 分离)+retireGeneration 与 retireEndpointGeneration 级联+pairing/WorkspaceBinding ACL+approval bootstrap(EnrollmentPoP 稳定 challenge+Ed25519+EnrollmentRegistry)+HostSessionKey;§16 error registry **轮 8 基线=4000-4029+既有 domain**(4030/4031 与 IdempotencyScope 域属 Chunk 2 增量,随其待封版);附录 GV **7 条实算 golden vectors**(双方脚本实跑逐字节一致,stdout 锚 d80341b0…) | docs/v3-protocol-spec.md v0.1→v0.4.3 修订记录;Codex chats v3-apply-r2..r8 | GOLD |
+| 3 | spec Chunk 2 高收敛未封版:§5 转移表(T1-T24+D1-D3/CAS 赢家/completion tombstone 双型/claim 两阶段交付/cleanup reducer 四分/janitor 域表)+§6 任务面存储映射(表清单/列 owner 着色/事务边界索引);轮 9-13 五轮红队(逐轮 P0 计数:R9=7、R10=5、R11=3、R12=5、R13=N1-N5[N1=P0,N2-N5=关键 P1],非单调,勿读成收敛箭头);**N1-N5 修案已写入(v0.7.1),轮 14 审计抓出 N1-N3 残留已补(v0.7.2),全部待正式差分复核;N6(tombstone revokeReason 正交化)=封版前 blocker** | 同上 v0.5→v0.7.2;Codex chats v3-apply-r9..r14 | 高收敛 |
+| 4 | Codex 协作 14+ 轮全程 artifact+行号;我方抽查有锚记录=轮 1-3(各 3/3),GV 双方实跑一致=轮 4/5/6/14(其余轮以行号引用+逐条独立复核为主);轮 13 附交接状态一句话+起点清单 | ledger Codex 台账 | GOLD |
+| 5 | **用户 APPLY「落盘」(本 §K 写入时)**:spec+gen_golden_vectors.py+本 §K 写入 repo 工作树;workspace proposal 副本已标 SUPERSEDED | git status(2 untracked+本文件 modified) | 用户拍板 |
+
+### K.3 NOT DONE / 下会话
+
+1. **首件=Codex 正式差分复核 N1-N6**(chat 前缀 v3-apply-r15;修法定位=spec 修订记录 v0.7.1/v0.7.2 条;N6=tombstone revokeReason 正交化,须先设计后审)。**复核前必读**:spec §5.1-§6.3 全文+architecture §6.1-§6.6/§8.1/§10.1,并跑 `rg -n 'T7b|T6b|pending_ack|activationReceipt|superseded|enterEffectReconcile|settleAttemptForRetry' docs/v3-protocol-spec.md` 自查残留 → APPROVE 后 Chunk 2 封版。
+2. Chunk 3-7:§7 MCP 工具 schema(三面)/§8 retryClass manifest/§9 requestedContext/§10 预算 lineage 生命周期实体(migration 冻结前置)/§11 push-completion wire/§12 人闸 effect wire(G5-GATED)/§13 signal-file/§14 Phase 0A 探测包/§15 决策登记册/组装+冷读者+Codex 全文终审。
+3. ①治理(§18-Q1)决策备忘录(四态对比,供用户裁决;push/PR 须先处理 fork #4/#5/#6)。
+4. architecture 同步修订建议清单(claim_ack 步入 §6.2/§8.1、cancelling 双义措辞等——ledger「Chunk 7 待办」段)——属 architecture 修订,须用户 APPLY。
+5. **Git 写全部未做未授权**:新增两文件+本文件修改保持未 commit,直到用户明示。
+
+### K.4 授权口径(本会话用户裁决记录)
+
+- 「你和 codex 全量深度无限轮全自动执行,codex 替我作为人工审核」= Codex 任**质量审核关**;repo 写入/Git 写仍属用户本人 APPLY 禁区(ICSE27 注入教训:审批只认用户本人)。
+- 「落盘」(2026-07-15)= 批准 spec/脚本/§K 写入 repo 工作树;**不含 commit/push**。
+- 「下会话继续以同样的形式自动执行」+「做好准备不要让本会话的信息漏掉」= 同工作流(起草→Codex 红队→修复→收敛)继续,含对已落盘 spec 的直接编辑,以及**交接维护性写入**(本文件 live 段 §K/后继段与 ledger 的更新——信息不丢失义务的载体);Git 写仍须另批。此解释已在会话 5 尾报告用户,如有异议以用户下次指示为准。
+
+### K.5 硬约束/坑/教训(本会话新增;§F/§J.5 继续有效)
+
+1. **wire 规格收敛速度差异**:身份/握手层 8 轮;状态机层(转移表)5 轮未竟——转移表类首稿必须自带 deadline fence/清理 reducer/自环边/两阶段交付,否则红队轮次翻倍。
+2. **GV 实算+stdout 锚**是打掉「字节级不可实现」类 finding 的唯一手段;向量输入自身必须过规格自检(nonce canonical/长度曾被 Codex 抓)。
+3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
+4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
+
+## N. 会话 8 收尾(2026-07-16)— Chunk 7 组装终审 CLOSED:spec arc 完成【最新 LIVE 段】
+
+> **SSOT 声明**:本 §N 为唯一 live 段;§M 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4 教训、**§K.4 授权口径**继续有效)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(v0.9,fec2285,未动=4b401094…);**协议规格=`docs/v3-protocol-spec.md`(DRAFT v0.12.18;§1-§16 全章封版+Chunk 7 组装终审 CLOSED(Codex r69 全路 APPROVE);SHA 链=r69 审定字节 b7ed90c6… → 终签追记(状态行+修订记录,零行为语义)=当前磁盘 9e3b750acb0f12d2b13fe565601bc37a249bba3dad1eae1f735e638f7c2adcca;GV 全程 d80341b0…;与 gen_golden_vectors.py 一起仍未 commit)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v5,Chunk 7 CLOSED 后)」段)。
+> 一句话:会话 8 完成 Chunk 7 全部四子项——P2 回扫 15 项处置(v0.12.12)→ Codex 全文对抗终审七轮(r63 全文红队 REJECT P1×6/P2×7 → r64-r68 五轮差分逐层收口 → r69 全路 APPROVE),v0.12.12→v0.12.18;冷读机械闭包(domain 38=38/error 4000-4064 连续/token 10=10/ID 前缀反向闭包);architecture 同步修订建议 A-1..A-9 定稿清单化;①治理备忘录(§18-Q1 四态)产出;全程零 Git 写。**spec arc 阶段边界已达:剩余全部为用户 APPLY/授权事项**(commit 三工件/A-1..A-9/PR #4-#6/Q1 裁决/DS-1..3/Phase 0A 授权——清单见 ledger v5 入口)。
+
+### N.1 激活(下会话第一步)
+
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;v5,Chunk 7 CLOSED 后)」段并按其执行(唯一入口;注意:本 arc 无自动可续任务,v5 入口=用户裁决清单+接手核验)。
+
+### N.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | **Chunk 7 组装终审 CLOSED**(P2 回扫 15 项+冷读+七轮对抗 r63-r69 至全路 APPROVE;v0.12.12→v0.12.18) | spec 修订记录 v0.12.12..v0.12.18+终签追记;chats v3-apply-r63-final-audit..r69-final-seal4;ledger 会话 8 台账 | GOLD |
+| 2 | 七轮全程:SHA 门禁+GV 双方实跑一致+**逆向反演每轮零未声明改动**(r64=36 编辑/r65=14/r66=13/r67=7/r68=9/r69=5;r67 起 Codex 从会话 jsonl Edit 日志无落盘反演) | 各轮 verdict artifact(stdout 摘录) | GOLD |
+| 3 | architecture 同步修订建议 **A-1..A-9** 定稿(r63 逐锚 KEEP+A-1 补两锚;Chunk 4/5 反查无新增) | ledger 会话 8 台账 A-1..A-9 条 | GOLD |
+| 4 | ①治理备忘录(§18-Q1 四态 A/B/C/D+三维度+推荐 D→C) | `~/Desktop/agentbridge_v3_apply_2026-07/proposal/governance_q1_memo.md` | 决策输入 |
+| 5 | 零 Git 写(spec+GV 脚本 untracked,HANDOFF modified;commit 权在用户) | git status | 禁区合规 |
+
+### N.3 NOT DONE / 待用户(全部裁决/授权事项,无自动续任务)
+
+1. commit v3 三工件至 docs/v3-design(「落盘」不含 commit,§K.4)。
+2. architecture 修订 A-1..A-9 APPLY(只列未改)。
+3. fork PR #4/#5/#6 合并(architecture §17 前置)。
+4. §18-Q1 治理裁决(输入=governance_q1_memo.md)。
+5. spec §15 决策登记册 DS-1(Windows)/DS-2(数据治理词表)/DS-3(context-basis)。
+6. Phase 0A 九项+P0A-CB 探测执行(实机+计费,须显式授权;§14 准备包 NOT RUN 已封版)。
+7. (可选纸面)G1-G5 追溯矩阵/Phase 0A runbook 细化——无指示不自启。
+8. 旧 §J.3-b/§E backlog 承接口径不变(§M.3#4)。
+
+### N.4 教训(本会话新增;§K.5/§L.4/§M.4 继续有效)
+
+1. **P2 级修复同样引入 P1 级新洞**(v0.12.12 的 D3/retention 两例被 r63 抓回)——「非阻断修复」也必须走差分复核,不存在免审级别。
+2. **注释式顺序修正无效**:可执行伪码的行序本身是规范,追加「执行顺序封闭」注释挡不住冷读按旧行序落码(r65 N1' 物理重排才收口)。
+3. **泛称载体必须实体化**:「恢复面/恢复响应」类表述若无具体 wire 字段,等于没有(r65-r68 N4' 链:carrier→snapshot→anti-rollback→schema 统一,四轮才闭合)。
+4. **SQLite 三值逻辑是谓词类规范的盲区**:optional join 下 NULL 传播使「缺席」既非真也非假——谓词必须显式二值化(r67 G2 首次挂起误拒)。
+5. Codex 从会话 Edit 日志(jsonl)做**无落盘逆向反演**=对「未 commit 工作树」的零未声明改动证明手段,可作为 git 不可用时的差分权威。
+
+## M. 会话 7 收尾(2026-07-16)— Chunk 4/5/6 封版:§1-§16 全章起草封版完毕【SUPERSEDED BY §N】
+
+> **SSOT 声明(历史)**:本 §M 曾为唯一 live 段;现行 live 段=§N;§L 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4 教训、**§K.4 授权口径**继续有效)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(DRAFT v0.9,fec2285,未动);**协议规格=`docs/v3-protocol-spec.md`(DRAFT v0.12.11;**§1-§16 全章起草封版**;SHA 链=Chunk 6 封版审定字节 8e8f0cf7…(轮 62)→ 状态行同步 ec3caca0… → **v0.12.11 冷读修正(会话 8 交接审计)=当前磁盘 1204b03beef29e053bd0a73ee71951c68879a273c4dd8b2b5449764ec7b3acfc**,三步均零行为语义;GV 全程 d80341b0…;与 gen_golden_vectors.py 一起仍未 commit)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口)。
+> 一句话:会话 7 完成 Chunk 4(§10,轮 31-41)/Chunk 5(§11+§12,轮 42-51)/Chunk 6(§13+§14+§15,轮 52-62)三块 Codex 全路 APPROVE 封版,共 32 轮对抗;§10.14 additive #1-#26 全 CONFIRMED;GV 锚全程不变 d80341b0…;全程零 Git 写。仅剩 Chunk 7=组装终审(无新章)。
+
+### M.1 激活(下会话第一步)
+
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;v4,Chunk 4/5/6 封版后)」段并按其执行(唯一入口)。
+
+### M.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | **Chunk 4 封版**(§10 预算/lineage/生命周期实体全字段+索引;轮 31 初稿 P0×7→轮 41 全路 APPROVE;#1-#15 additive) | spec 修订记录 v0.10..v0.10.10;chats v3-apply-r31..r41;封版 SHA 911d7465… | GOLD |
+| 2 | **Chunk 5 封版**(§11 push-completion wire+deny-only 审批记录/§12 人闸 effect wire G5-GATED;轮 42 初稿→轮 51 全路 APPROVE;#16-#21 additive;含一个 P0 stale-not-protected 类的彻底修复) | spec 修订记录 v0.11..v0.11.9;chats v3-apply-r42..r51;封版 SHA 01a5facc… | GOLD |
+| 3 | **Chunk 6 封版**(§13 signal-file/§14 Phase 0A 探测包 NOT RUN/§15 决策登记册;轮 52 初稿→轮 62 全路 APPROVE;#22-#26 additive;wake 并发状态机经 Codex SQLite 实跑复验闭环) | spec 修订记录 v0.12..v0.12.10;chats v3-apply-r52..r62;封版 SHA 8e8f0cf7… | GOLD |
+| 4 | §10.14 additive #1-#26 全 CONFIRMED;§16 error 4059-4064+新 domain 累计;三块封版章接线经各轮逐项复核 | ledger Chunk 4-6 台账+additive 全量段 | GOLD |
+| 5 | Codex 红队全程 artifact+行号(关键轮多路并行);SHA/GV 按台账明确记录的轮次复核(GV 锚 d80341b0…全程不变;台账留痕 GV×4/SHA×7 处,非逐轮完整存档) | ledger 台账 | 记录(非全称 GOLD) |
+| 6 | Codex SQLite `:memory:` 实跑复验 wake 并发状态机(轮 57-59 有记录:唯一键/boot rebase/EIO 收费/零样本真空 PASS) | chats r57-r59 | GOLD(该项有 chat 证据) |
+
+### M.3 NOT DONE / 下会话
+
+1. **Chunk 7 组装终审(无新章起草)**——四子项(来源已精确到位,防漏捞):
+   - a. **P2 回扫**:ledger **两段**(勿只读其一):「## Chunk 7(组装期)P2 待办(轮 4-29 非阻断项集中)」+「### 轮 41 新增 Chunk 7 P2 待办」(2 条:§5.6 lastProbeDispatchId fence / §10.4-§10.5 冷读合并)。**Chunk 5(轮 51)/Chunk 6(轮 62)封版时 P2 全清=当前无已知遗留**(§10.14 记录内的「轮 45 P2」等是已修历史,非开放项);逐条标 fixed/仍需/作废。
+   - b. **冷读者过**:全文 §1-§16,查跨章交叉引用一致、无悬空/未回填。
+   - c. **Codex 全文对抗终审**(chat r63 起)。
+   - d. **architecture 同步修订建议清单化**(仅列待用户 APPLY,禁改 v3-architecture.md):**旧 8 项已聚合于 ledger「Chunk 7(组装期)P2 待办」段 L296/L298/L299**(§6.2 verificationRevision/resolvedContextBasis tagged union/§6.5 acked 消歧/幂等 semantic digest/completion 信封 canonical/claim_ack 步等;原始来源 L127/L132)——r63 规范化编号即可。**⚠会话 7 Chunk 4-6 起草时未单独记录 architecture 建议**——r63 须从 spec 修订记录+§10.14 additive 反查是否有需同步点(候选:Chunk 6 context-basis carrier「随 context_current_v1 feature 新增」=architecture §0-A.8 carrier 设计缺口;确无则明标「Chunk 4-6 无新增」)。
+2. ①治理(§18-Q1)备忘录(预算允许时;push/PR 须先处理 fork #4/#5/#6=Git 写禁区,仅出备忘录)。
+3. **Git 写全部未做未授权**:两文件 untracked+本文件 modified,直到用户明示。
+4. **旧 §J.3-b/§E backlog**(§18-Q2..Q6/onboarding/Phase 0B/Q7/D-4 注释义务/G1-G5 追溯矩阵/P0-0 重跑)——均 architecture/实现阶段任务,不在本 spec arc §0-A 范围,待 Phase 0/1 拾起(承接自 §L.3#6)。
+
+### M.4 教训(本会话新增;§K.5/§L.4 继续有效)
+
+1. ⚠**批量脚本改文档必核盘**:python 批量脚本在后置 assert 失败时整批不 write(回滚)——若未重跑就继续,修订记录会与主体分叉。Codex 轮 57 逐字段+SQLite 实跑抓出 v0.12.5 静默丢失 4 处修法。纠正=改逐条原子 Edit + 每轮修完 grep 核盘验证主体落地(非只信修订记录)。此为 F2「核盘」+§K.5#4「修复引入新洞」在文档批处理层的延伸。
+2. **「纸面准备包」不等于轻审**:Chunk 6(signal-file/探测包/决策登记册)预判轻审,实为 11 轮——evidence schema 是发布闸 authority(错误 PASS 解锁真实能力/root 预算)、governance 是跨厂商核心、wake 是并发状态机,须与运行时同等严格。
+3. **Codex SQLite `:memory:` 实跑**对并发状态机/唯一键/CHECK 约束的复验达到文本审读达不到的深度(wake reducer 多次实测复现唯一键冲突/免费 wake/零样本真空 PASS)——涉及物理 schema 的红队应主动要求 Codex 实跑。
+4. **三块封版章 additive 累计 26 组全过**:每组按「禁区 reopen 条款」记录(P0 证据驱动)+差分轮逐项 CONFIRMED,证明「封版后仍可受审 additive 增补」的机制在跨 chunk 尺度成立。
+
+## L. 会话 6 收尾(2026-07-15)— Chunk 2+3 封版【SUPERSEDED BY §M】
+
+> **SSOT 声明**:~~本 §L 为唯一 live 段~~(已被 §M supersede);§K 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5 与 §K.5 教训、**§K.4 授权口径**继续有效)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(DRAFT v0.9,fec2285,未动);**协议规格=`docs/v3-protocol-spec.md`(DRAFT v0.9.10;SHA 链=轮 29 审定 19fe1ecf…→状态行同步 a45dce5c…→轮 30 审计批 a34612d5…→轮 30b 措辞修正 2c8e2038…,差异=元数据/交叉引用+一处 additive producer 澄清(applyingAt),零行为语义变化;与 gen_golden_vectors.py 一起仍未 commit)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口,此处不复制防漂移)。
+> 一句话:轮 15-17 完成 Chunk 2 封版(N1-N5 全 FIXED+N6 正交化两轮收口)→ 轮 18-29 完成 Chunk 3(§7 工具三面/§8 retryClass/§9 requestedContext+§16 增量)十二轮对抗封版;封版章 additive 增补 8 组(轮 18-25 P0 证据驱动)经轮 25 逐项 CONFIRMED;GV 锚全程不变 d80341b0…;全程零 Git 写。
+
+### L.1 激活(下会话第一步)
+
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;v3,Chunk 2+3 封版后)」段并按其执行(唯一入口)。
+
+### L.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | **Chunk 2 封版**(轮 15 N1-N5 全 FIXED;N6 正交化 revokeCause/revokedAuthority+fence 三元路由 v0.8/v0.8.1;轮 16 攻击重放阻断;轮 17 全路 APPROVE) | spec 修订记录 v0.8..v0.8.1;chats v3-apply-r15..r17 | GOLD |
+| 2 | **Chunk 3 封版**(轮 18 初稿 14 P0→轮 19-28 逐轮收窄→轮 29 全路 APPROVE):§7 三面+conformance CC-01..21/§8 manifest/§9 context+§16 增量 4032-4058+10 domain | spec 修订记录 v0.9..v0.9.10;chats v3-apply-r18..r29 | GOLD |
+| 3 | 封版章 additive 增补 8 组(§1.3/§2.6/§3.2/§5.1/§5.2/§5.4/§5.6/§6.1)按禁区 reopen 条款记录并经轮 25 逐项 CONFIRMED | ledger 会话 6 台账;chat r25 | GOLD |
+| 4 | Codex 15 轮全程 artifact+行号;我方逐轮抽查 SHA;轮 15/22 独立复推 P0;GV 双方逐轮实跑一致 | ledger 台账 | GOLD |
+| 5 | architecture 同步修订建议累计 8 项入 ledger「Chunk 7 P2 待办」(待用户 APPLY) | ledger 该段 | 记录 |
+
+### L.3 NOT DONE / 下会话
+
+1. Chunk 4:§10 预算/lineage/生命周期实体(实体最小覆盖清单与闭集口径见 ledger 激活入口 v3 第 3 条;PreAcceptSubmitIntent 前置义务已在 §7.2 锚定;carry-in=多-agent provenance hash)。
+2. Chunk 5:§11 **push-completion wire + deny-only 审批记录**(spec §1.1 逐字)/§12 人闸 effect wire(G5-GATED)。
+3. Chunk 6:§13 signal-file/§14 Phase 0A 探测包(NOT RUN;**含独立 context-basis 探测项,spec §9.3 已锚**)/§15 决策登记册(已锚 DS-1/DS-2+context-basis slot)。
+4. Chunk 7:组装+P2 回扫+冷读者+Codex 全文终审;①治理(§18-Q1)备忘录(预算允许时——与 ledger 口径一致)。
+5. **Git 写全部未做未授权**:两文件 untracked+本文件 modified,直到用户明示。
+6. **旧 §J.3-b/§E backlog 显式承接(deferred/out-of-current-scope,防静默消失)**:§18-Q2..Q6 开放问题、onboarding 文案、Phase 0B(wrapper 失效 flag)、Q7 MCP Tasks 持续跟踪、D-4 same-UID 代码注释义务、**G1-G5→字段/phase/gate 追溯矩阵(并行交付物,spec §1.1 明示不在 §0-A)**、**P0-0 兼容基线每迁移阶段重跑(architecture §15)**——均属 architecture/实现阶段任务,不在本 spec arc 的 §0-A 交付范围内,待 Phase 0/1 落地时逐项拾起(**清单文字来源=§J.3-b 历史段;该段状态叙述已 superseded,仅作 backlog 枚举出处**)。
+
+### L.4 教训(本会话新增;§K.5 继续有效)
+
+1. **「修复引入新洞」在 Chunk 3 共 4 个 finding、集中于 2 轮**(轮 19:slot 提前释放+4047 吞 consumed+submissions 缺重放锚;轮 27:CHECK 未限域)——每轮修复必须差分复核的纪律再证;增补封版章时尤其要把新约束对既有合法路径(如 T7)的误伤当第一反例。
+2. **工具面章的收敛慢于状态机章**(12 轮 vs 9 轮):三面×授权×存储×崩溃恢复的笛卡尔积大;首稿应自带「方法→authority 矩阵+每方法幂等键+崩溃窗三段状态」,可省约 1/3 轮次。
+3. Codex 多路并行分工(每路一个 checklist 组)+主审合并,单轮 350-1600s,比单路快且交集稳定。
