@@ -4,8 +4,8 @@
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
 > **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.10,2026-07-17 封版)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> ⚠**CURRENT LIVE ENTRYPOINT = §O.1**(2026-07-17 会话 9 收尾起;**PR #4-#6 全合并(master=8d1e96ee)+architecture v0.10 封版;下会话按 ledger 激活入口 v7 执行——首件=Phase 0A 纸面准备包**)。下会话激活唯一入口是 **§O**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v7**;v6 及更早 SUPERSEDED);**§A–§N 的状态与行动段均为历史快照**(§N 为会话 8 时点,已被 §O supersede),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
-> **恢复顺序(现行)**:直接读 §O(§O.1 激活 → §O.2 DONE → §O.3 状态 → §O.4 教训;**§K.4 授权口径与 §K.5/§L.4/§M.4/§N.4 教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除 §J.5/§K/§L/§M/§N 明示替换处)仍有效。
+> ⚠**CURRENT LIVE ENTRYPOINT = §P.1**(2026-07-17 会话 10 收尾起;**Phase 0A 纸面准备包 v0.4 封版(Codex r82b-r85 四轮,r85 全项 APPROVE);下会话按 ledger 激活入口 v8 执行——首件=待用户指示(实机探测须 run card/DS-1..3 须用户选择/Phase 1A 须授权)**)。下会话激活唯一入口是 **§P**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v8**;v7 及更早 SUPERSEDED);**§A–§O 的状态与行动段均为历史快照**(§O 为会话 9 时点,已被 §P supersede),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
+> **恢复顺序(现行)**:直接读 §P(§P.1 激活 → §P.2 DONE → §P.3 状态 → §P.4 教训;**§K.4 授权口径与 §K.5/§L.4/§M.4/§N.4/§O.4 教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除 §J.5/§K/§L/§M/§N 明示替换处)仍有效。
 > ~~恢复顺序(§J 时点,SUPERSEDED by §K,勿执行):读 §J(§J.1→§J.5)~~
 > ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
@@ -448,11 +448,51 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
 4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
 
-## O. 会话 9 收尾(2026-07-17)— PR #4-#6 全合并 + architecture v0.10 封版【最新 LIVE 段】
+## P. 会话 10 收尾(2026-07-17)— Phase 0A 纸面准备包 v0.4 封版【最新 LIVE 段】
+
+> **SSOT 声明**:本 §P 为唯一 live 段;§O 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4/§N.4/§O.4 教训、**§K.4 授权口径**继续有效)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(v0.10 封版,SHA d40fc07c…,不变);协议规格=`docs/v3-protocol-spec.md`(v0.12.18+companion,SHA de56247a…,不变;GV 锚 d80341b0… 全程不变);**Phase 0A 执行细则=`docs/phase0a-runbook.md`(DRAFT v0.4 封版,SHA16 4064e66c…)+harness=`scripts/phase0a/` 11 件(selftest 94 项全绿)——两者 2026-07-17 会话 10 经 Codex 四轮(r82b REJECT P0×6→r83 部分收割+3 新 finding→r84 REJECT 窄 P1×1→r85 全项 APPROVE)封版,截至本会话尾 untracked 待 commit(已提请用户)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v8)」段)。
+> 一句话:会话 10 完成一件——Phase 0A 纸面准备包(runbook v0.4+harness)对抗封版;期间 r82b 结果自上会话中断处 rollout 收割、r83/r85 两次载体层异常均核盘收割无损;DS-1..3 按禁区跳过;实机探测未触(零计费)。
+
+### P.1 激活(下会话第一步)
+
+读 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的「下会话激活(入口;**v8**)」段并按其执行(唯一入口;v7 已 SUPERSEDED)。⚠首件=待用户指示(纸面已尽,实机/DS/Phase 1A 均须用户输入)。
+
+### P.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | r82b 结果收割(上会话中断的红队轮) | rollout 02-18-49-019f6c27…(五路);verdict REJECT P0×6+P1×5+P2×1;我方抽查 5/5 复现 | GOLD |
+| 2 | v0.2 修入(12 findings)+selftest 84 项 | ledger 会话 10 台账;修复期自抓新洞 1 例(allowlist 缺键) | GOLD |
+| 3 | r83 部分收割(载体被杀)→3 新 finding 复现 | rollout 019f6f88…两线程;bool/int 混淆+非对象 traceback+raw-source 无绑定,3/3 我方复现 | GOLD |
+| 4 | v0.3 修入(strict_deep_equal/守卫/RAWSOURCE 门)93 项 | ledger;GV 锚不变 | GOLD |
+| 5 | r84 完整差分(REJECT 窄:F1 宿主重启相位 P1+F2 字段漂移 P3) | codex task-mrosm6k1 result 全文;我方抽查 spec:2306/runbook:462/:120 属实 | GOLD |
+| 6 | v0.4 修入(HOSTRESTART 门+host_instance 行+§1.7 修正)94 项 | ledger;observed/模板不变 | GOLD |
+| 7 | **r85 全项 APPROVE:准备包封版** | rollout 019f6fb1…完整终签(载体挂死,核盘收割);F1×7+F2×2 全 FIXED+7 边界回归;我方抽查行号 4/4 | GOLD |
+
+### P.3 状态
+
+1. Phase 0A 纸面准备包——**v0.4 封版**;runbook+scripts/phase0a/ 为 untracked,**commit 已提请用户**(连同本文件 M 状态)。
+2. Phase 0A 实机探测——未触;执行须用户在场+runbook §11 run card 逐项批准(计费敏感 P0A-4/5/6/7/CB)。
+3. spec §15 DS-1/2/3——仍待用户明确选择(不变)。
+4. push——未授权(不变);本地 docs/v3-design 仍基于旧 master d29faace(rebase=另一次 Git 写授权)。
+5. 消费门 allowlist——交付态 fail-closed(approved=[]、matrix=null),解锁=用户探测批次启动时显式改。
+
+### P.4 教训(本会话新增;历代教训继续有效)
+
+1. **codex 载体三种异常均≠任务失败**:内容过滤杀(r83)/挂死 running 不传回(r85)/rescue 误发 resume 冲突——一律先核 `~/.codex/sessions/<date>/rollout-*.jsonl` 收割再决定重发;r82b 甚至整轮无损收割自上会话。
+2. **OpenAI 内容过滤对「红队/攻击/对抗」措辞敏感**:r82/r83 两杀实证;r84 起全中性措辞(一致性核对/边界输入回归/符合性验证)通过——审计强度不降,只换词汇。
+3. **Python == 混淆 bool/int 是 JSON 校验的确定性陷阱**(`{"ok":1}=={"ok":true}`):任何模板/深等/绑定比较必须类型级 strict_deep_equal(r83 P0,全 int artifact 实跑穿透模板门实证)。
+4. **「转写 spec 到 runbook」的漂移会把语义收窄成可执行但错误的协议**(宿主重启→桩进程重启,r84 F1)——runbook 关键动词(谁被重启/谁在观察)须逐锚回核 spec 原文,与会话 9 教训 5 同族。
+5. 修复引入新洞第 7 例(check_allowlist 缺键当 null)——由扩展后的 selftest 当场抓住:**负例套件跟着修复同轮扩,是抓自引入洞最便宜的一道网**。
+
+---
+
+## O. 会话 9 收尾(2026-07-17)— PR #4-#6 全合并 + architecture v0.10 封版【SUPERSEDED BY §P】
 
 > **SSOT 声明**:本 §O 为唯一 live 段;§N 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4/§N.4 教训、**§K.4 授权口径**继续有效)。
-> 分层 SSOT:架构=`docs/v3-architecture.md`(**DRAFT v0.10,2026-07-17 封版:A-1..A-9 spec 反哺修订+§17 PR 合并事实+§18-Q1 裁决记录;Codex r75-r78 四轮差分,r78 全路 APPROVE;磁盘 SHA=d40fc07c80481fabd0fbfbd519f34fa94c634422b769f2dc6b1648477aa9e9b9,未 commit**);协议规格=`docs/v3-protocol-spec.md`(v0.12.18+**A-9 零语义 companion**(§14.1 回链两处+维护性追记;Codex 逆向 patch 证明精确还原封版字节 9e3b750a…;磁盘 SHA=de56247a215e2186a876f72f39f427a7f6541b78846315344f597e65619815d9,未 commit);GV 全程 d80341b0…);操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v7)」段)。
-> 一句话:会话 9 完成两件——①fork PR #4→#5→#6 全部 squash 合并(**master=8d1e96ee**;根因链=fork UI 级 Actions 禁用标志(GET 谎报 enabled,PUT 才清除)+测试跨平台路径 bug(Codex 容器实跑抓出);含 #5 被 GitHub 意外 close 的临时-ref 恢复、bundle 冲突的重生成解法、#6 delta 逐字节保真重放;Codex r71-r74 exact-OID 审计,全程留证);②architecture A-1..A-9 修订 v0.10 封版(r75 抓 5 组真实漂移→r76/r77 收窄→r78 全路 APPROVE)。c 件 DS-1..3 按禁区跳过;d 件 Phase 0A 纸面包=下会话首件。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(**DRAFT v0.10,2026-07-17 封版:A-1..A-9 spec 反哺修订+§17 PR 合并事实+§18-Q1 裁决记录;Codex r75-r78 四轮差分,r78 全路 APPROVE;磁盘 SHA=d40fc07c80481fabd0fbfbd519f34fa94c634422b769f2dc6b1648477aa9e9b9**);协议规格=`docs/v3-protocol-spec.md`(v0.12.18+**A-9 零语义 companion**(§14.1 回链两处+维护性追记;Codex 逆向 patch 证明精确还原封版字节 9e3b750a…;磁盘 SHA=de56247a215e2186a876f72f39f427a7f6541b78846315344f597e65619815d9);GV 全程 d80341b0…;**三件已经用户批准 commit=fc8030a(docs/v3-design,2026-07-17;未 push,push 仍属禁区)**,本文件其后维护性更新(含本句)保持 modified 待下次批)。⚠**spec 头部历史防护(r80)**:spec 状态行的「未 commit/基线 v0.7.2 经用户 APPLY 落盘」与「architecture v0.9=fec2285」等为封版前历史元数据(封版字节不为此改动)——操作事实以 fc8030a、architecture v0.10(d40fc07c…)、本 §O 为准,勿据以重开 A-1..A-9 或误判 commit 状态;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v7)」段)。
+> 一句话:会话 9 完成两件——①fork PR #4→#5→#6 全部 squash 合并(**master=8d1e96ee**;根因链=Actions 事件不投递(可证:GET 回显 enabled 不足为凭;有效 `PUT -F` 后下一次 reopened 恢复投递并创建 run——「UI 级禁用标志被清除」属强推断非直接观测,r79 修正)+测试跨平台路径 bug(Codex 容器实跑抓出);含 #5 被 GitHub 意外 close 的临时-ref 恢复、bundle 冲突的重生成解法、#6 delta 逐字节保真重放;Codex r71-r74 exact-OID 审计,全程留证);②architecture A-1..A-9 修订 v0.10 封版(r75 抓 5 组真实漂移→r76/r77 收窄→r78 全路 APPROVE)。c 件 DS-1..3 按禁区跳过;d 件 Phase 0A 纸面包=下会话首件。
 
 ### O.1 激活(下会话第一步)
 
@@ -470,15 +510,15 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 ### O.3 状态
 
-1. fork PR #4/#5/#6——**全部 MERGED,分支已清,master=8d1e96ee,零 open PR**。
-2. architecture v0.10——**封版待 commit**(用户批准后与 spec companion、本文件一并 commit)。
+1. fork PR #4/#5/#6——**全部 MERGED,fork 远端 PR head refs 已删,master=8d1e96ee,零 open PR**(本地仓的三条 PR head 分支(fix/bundle-sync-ci-gates、feat/lifecycle-hardening、feat/ops-hardening)与陈旧 remote-tracking refs 仍在,属会话前遗留,未授权不清理;本地 docs/v3-design 基于旧 master d29faace、不含 squash 链——rebase/replay 属另一次 Git 写授权)。
+2. architecture v0.10——**封版且已 commit(fc8030a,用户 2026-07-17 批准;含 spec companion 与本文件 §O 版)**。
 3. spec §15 DS-1/2/3——**仍待用户明确选择**(不变)。
 4. Phase 0A——纸面准备包(runbook+harness)=下会话首件;实机/计费仍须 run card。
 5. push——未授权(不变)。
 
 ### O.4 教训(本会话新增;历代教训继续有效)
 
-1. **GitHub GET 状态可与内部标志脱节**:fork 的 actions/permissions 回显 enabled=true 但事件不投递,幂等 PUT 才真正清除禁用标志——以实际 run 创建为准,不信设置回显。
+1. **GitHub GET 回显不能证明事件投递**:fork 的 actions/permissions 回显 enabled=true 期间 synchronize/首次 reopened 均零 run;有效 `PUT -F enabled=true`(小写 `-f` 传字符串会 422)后下一次 reopened 才创建 run——判定以实际 run 创建为准,不信设置回显;「内部禁用标志被 PUT 清除」是操作性推断而非直接观测(r79 口径)。
 2. **官方 retarget 保证不可依赖**:删除已合并 PR 的 head 分支时,依赖它的子 PR 被直接 close(实测 base_ref_deleted+closed,无 automatic_base_change 事件)——stacked 合并序=先显式 retarget 子 PR、后删父分支。
 3. **macOS 预验≠CI**:跨平台路径(XDG vs Application Support)与 PID 1 进程回收差异必须容器实跑(--init);r71 Codex 容器抓出被本机预验掩盖的确定性红灯。
 4. **生成物冲突恒重生成**:bundle 类冲突不手工 merge,从 merged source 按 canonical 命令重 build。

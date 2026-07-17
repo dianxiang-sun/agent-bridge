@@ -1,0 +1,143 @@
+{
+  "_comment": "expectedStateSequence templates — single SSOT referenced by docs/phase0a-runbook.md 附录 B. Copy one variant verbatim into evidence.expectedStateSequence (validate.py enforces membership). Variants (.a/.b/…) enumerate the combinations this runbook version is PREPARED TO ACCEPT — a deliberate narrowing of the spec-legal space (e.g. P0A-CB other_named byte source and further producer/transport pairings are spec-legal but not templated); accepting a new combination = template + runbook revision (version bump, runbook §0.6), never an ad-hoc evidence edit. Pick one variant per run card BEFORE executing. Strict deep-equality against observed — no wildcards. Retained data fields never reuse the reserved event tag name 'kind' (runbook §0.7).",
+  "P0A-1.a": {"events": [
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "session_start", "generationDelta": 1, "credentialRolled": false},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "resume", "generationDelta": 1, "credentialRolled": true},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "clear", "generationDelta": 1, "credentialRolled": true},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "compact", "generationDelta": 1, "credentialRolled": true},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "duplicate_session_start", "behavior": "idempotent_replay"},
+    {"kind": "coalescing_run"},
+    {"kind": "recovery_scenario", "scenarioKind": "sleep_wake", "recovered": true},
+    {"kind": "recovery_scenario", "scenarioKind": "force_quit_relaunch", "recovered": true}
+  ]},
+  "P0A-1.b": {"events": [
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "session_start", "generationDelta": 1, "credentialRolled": false},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "resume", "generationDelta": 1, "credentialRolled": true},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "clear", "generationDelta": 1, "credentialRolled": true},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "registration_decision", "mappedRegistrationSource": "compact", "generationDelta": 1, "credentialRolled": true},
+    {"kind": "signal_write"}, {"kind": "file_changed_hook"}, {"kind": "wake_observed"},
+    {"kind": "session_start_hook"},
+    {"kind": "duplicate_session_start", "behavior": "new_generation"},
+    {"kind": "coalescing_run"},
+    {"kind": "recovery_scenario", "scenarioKind": "sleep_wake", "recovered": true},
+    {"kind": "recovery_scenario", "scenarioKind": "force_quit_relaunch", "recovered": true}
+  ]},
+  "P0A-2.a": {"events": [
+    {"kind": "plugin_install", "ok": true}, {"kind": "plugin_enable", "ok": true},
+    {"kind": "old_task_tool_probe", "toolVisible": false},
+    {"kind": "new_task_tool_probe", "toolVisible": true},
+    {"kind": "hook_trust_prompt", "accepted": true},
+    {"kind": "plugin_upgrade", "hashChanged": true},
+    {"kind": "retrust_prompt", "required": true, "accepted": true},
+    {"kind": "marketplace_refresh", "behavior": "refresh_ok"}
+  ]},
+  "P0A-2.b": {"events": [
+    {"kind": "plugin_install", "ok": true}, {"kind": "plugin_enable", "ok": true},
+    {"kind": "old_task_tool_probe", "toolVisible": false},
+    {"kind": "new_task_tool_probe", "toolVisible": true},
+    {"kind": "hook_trust_prompt", "accepted": true},
+    {"kind": "plugin_upgrade", "hashChanged": true},
+    {"kind": "retrust_prompt", "required": true, "accepted": true},
+    {"kind": "marketplace_refresh", "behavior": "cache_invalidated_ok"}
+  ]},
+  "P0A-3.a": {"events": [
+    {"kind": "shim_spawn", "reachable": true},
+    {"kind": "identity_probe", "obtained": true, "hostInjected": true},
+    {"kind": "stability_check", "phase": "same_thread_recall", "stable": true},
+    {"kind": "stability_check", "phase": "desktop_restart_resume", "stable": true}
+  ]},
+  "P0A-4.a": {"events": [
+    {"kind": "mcp_handshake", "ok": true}, {"kind": "thread_started"},
+    {"kind": "elicitation_captured", "shapeCaptured": true},
+    {"kind": "cancel_probe", "cancelObserved": true},
+    {"kind": "crash_restart_probe", "sessionNotFound": true},
+    {"kind": "auth_check", "authSource": "subscription"}
+  ]},
+  "P0A-5.a": {"events": [
+    {"kind": "visibility_check", "visible": true}, {"kind": "navigation_check", "works": true},
+    {"kind": "drain_resume_check", "behavior": "resumes"},
+    {"kind": "dual_client_check", "behavior": "isolated_ok"}
+  ]},
+  "P0A-5.b": {"events": [
+    {"kind": "visibility_check", "visible": true}, {"kind": "navigation_check", "works": true},
+    {"kind": "drain_resume_check", "behavior": "resumes"},
+    {"kind": "dual_client_check", "behavior": "serialized_ok"}
+  ]},
+  "P0A-5.c": {"events": [
+    {"kind": "visibility_check", "visible": true}, {"kind": "navigation_check", "works": true},
+    {"kind": "drain_resume_check", "behavior": "new_thread"},
+    {"kind": "dual_client_check", "behavior": "isolated_ok"}
+  ]},
+  "P0A-5.d": {"events": [
+    {"kind": "visibility_check", "visible": true}, {"kind": "navigation_check", "works": true},
+    {"kind": "drain_resume_check", "behavior": "new_thread"},
+    {"kind": "dual_client_check", "behavior": "serialized_ok"}
+  ]},
+  "P0A-6.a": {"events": [
+    {"kind": "nudge_scenario", "startEvent": "stop", "hookFired": true, "relativePhase": "before_next_turn"},
+    {"kind": "visual_check", "position": "visible_banner", "persistence": "persistent"},
+    {"kind": "queue_mode_check", "mode": "queue"},
+    {"kind": "nudge_scenario", "startEvent": "user_prompt_submit", "hookFired": true, "relativePhase": "before_next_turn"},
+    {"kind": "model_context_check", "entersModelContext": false}
+  ]},
+  "P0A-6.b": {"events": [
+    {"kind": "nudge_scenario", "startEvent": "stop", "hookFired": true, "relativePhase": "before_next_turn"},
+    {"kind": "visual_check", "position": "visible_inline", "persistence": "persistent"},
+    {"kind": "queue_mode_check", "mode": "queue"},
+    {"kind": "nudge_scenario", "startEvent": "user_prompt_submit", "hookFired": true, "relativePhase": "before_next_turn"},
+    {"kind": "model_context_check", "entersModelContext": false}
+  ]},
+  "P0A-7.a": {"events": [
+    {"kind": "resume_attempt", "rejected": true},
+    {"kind": "desktop_pollution_check", "polluted": false}
+  ]},
+  "P0A-8.a": {"events": [
+    {"kind": "uds_handshake", "ok": true}, {"kind": "uds_reconnect", "ok": true},
+    {"kind": "stale_socket_probe", "handled": true}, {"kind": "rollback_probe", "ok": true}
+  ]},
+  "P0A-9.a": {"events": [
+    {"kind": "producer_frozen", "producer": "prompt_epoch"},
+    {"kind": "same_turn_group_done", "phasesCovered": "pre_restart+post_restart+reconnect"},
+    {"kind": "cross_turn_sample"}, {"kind": "cross_turn_sample"},
+    {"kind": "derivation_done"}
+  ]},
+  "P0A-9.b": {"events": [
+    {"kind": "producer_frozen", "producer": "host_turn_id"},
+    {"kind": "same_turn_group_done", "phasesCovered": "n/a"},
+    {"kind": "cross_turn_sample"}, {"kind": "cross_turn_sample"},
+    {"kind": "derivation_done"}
+  ]},
+  "P0A-9.c": {"events": [
+    {"kind": "producer_frozen", "producer": "none"}
+  ]},
+  "P0A-CB.a": {"events": [
+    {"kind": "byte_source_probe", "found": true, "sourceKind": "prompt_history"},
+    {"kind": "digest_producer_probe", "producer": "host", "transport": "host_hook_v1"},
+    {"kind": "caller_obtain_probe", "protocol": "host_provided_at_prompt_verified", "beforeSubmit": true},
+    {"kind": "digest_replay_check", "match": true},
+    {"kind": "resolution_done", "resolutionKind": "solved"}
+  ]},
+  "P0A-CB.b": {"events": [
+    {"kind": "byte_source_probe", "found": true, "sourceKind": "prompt_history"},
+    {"kind": "digest_producer_probe", "producer": "adapter", "transport": "authenticated_control_channel"},
+    {"kind": "caller_obtain_probe", "protocol": "host_provided_at_prompt_verified", "beforeSubmit": true},
+    {"kind": "digest_replay_check", "match": true},
+    {"kind": "resolution_done", "resolutionKind": "solved"}
+  ]}
+}

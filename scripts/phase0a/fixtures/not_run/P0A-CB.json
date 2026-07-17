@@ -1,0 +1,21 @@
+{
+  "probeId": "P0A-CB",
+  "probeSchemaVersion": 1,
+  "status": "NOT_RUN",
+  "hostMatrix": {
+    "product": "claude-code-desktop",
+    "hostVersion": "TBD-at-execution",
+    "os": "macOS",
+    "osVersion": "TBD-at-execution"
+  },
+  "runbookVersion": "phase0a-runbook/v1",
+  "profileVersion": "adapter-profile/v0-unfrozen",
+  "executedAt": null,
+  "evidenceDigest": null,
+  "detail": null,
+  "artifactRef": null,
+  "observedStateSequence": null,
+  "expectedStateSequence": null,
+  "timeoutMs": null,
+  "fallbackOnFail": null
+}

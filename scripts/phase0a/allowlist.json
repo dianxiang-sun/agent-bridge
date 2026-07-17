@@ -1,0 +1,6 @@
+{
+  "_comment": "Consumption-gate config (spec §14.2 消费门; runbook §0.6). Deliberately fail-closed at delivery: no approved runbook versions, no frozen host matrix — every --consume is rejected until the user explicitly sets these at probe-batch start.",
+  "approvedRunbookVersions": [],
+  "currentProfileVersion": "adapter-profile/v0-unfrozen",
+  "frozenHostMatrix": null
+}
