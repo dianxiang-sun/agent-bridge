@@ -456,7 +456,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 ### R.1 激活(下会话第一步)
 
-读 ledger「下会话激活(入口;v10)」段并按其执行。⚠首件=**批次 2(P0A-2+P0A-3)执行包起草**(同 r88-r94 工作流:五件套起草→Codex 对抗→封版→用户批准;计费面 none~low(≤2 turns) 须 card 批准);用户亦可改选:搭 abprobe 后 P0A-8 isolated 复跑转正 / DS-1/2/3 定案(纯纸面)。
+读 ledger「下会话激活(入口;v11)」段并按其执行。⚠首件=**批次 2(P0A-2 条件式 T1+P0A-3 混合)执行包起草**——**按自动化执行形态提案 v0.5(封版基准,见 R.3 #7)起草**,交付含 setup/teardown/controller/watchdog/verify_sidecars/wrapper 工装;同 r88-r94 工作流对抗→封版→用户批准 card(计费面 none~low(≤2 turns);批 card 即批自动化形态);P0A-8 isolated 转正复跑=批次 2 执行日附带项(判据附录显式重定义)。
 
 ### R.2 本会话 DONE(带证据)
 
@@ -476,16 +476,17 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 1. **P0A-8:degraded FAIL 已登记为 Phase 0B 设计输入**(口径 A)——`phase_0b_blocked: keep ws://127.0.0.1 experimental compat path`(spec §14.3 fallbackOnFail 逐字);**Phase 0B UDS 迁移在现有 TUI 行为下不可执行**;设计含义=不移除 WS fallback、不假设 UDS 断线自愈。正式 Phase 0A evidence 待 isolated 复跑(abprobe 未搭;hostMatrix 冻结 codex-cli 0.144.5/macOS 26.5,宿主升级=作废重探)。
 2. 批次 1 封版包(五件)不变;evidence 三件 repo 外(batch1/evidence/;是否入 repo 待用户)。
 3. r98 五建议=reopen 提案面(涉改封版 driver/harness/runbook),待用户决定,不即兴动:①isolated 复跑自动存 TUI stderr/exit code;②provenance 追加 driver/forwarder/daemon/codex 版本锚;③reconnect 机器可判窗口;④FAIL/INCONCLUSIVE 分派机器化(r98 实证 validator 只证「非 PASS」);⑤Phase 0B 断线产品行为定义。
-4. spec §15 DS-1/2/3——仍待用户(不变)。
+4. **spec §15 DS 裁决(会话 12 后半更新)**:用户原文「DS-1 采默认定案,DS-2 采默认定案,DS-3 暂缓」→ spec v0.12.19(commit=3b4c174;Codex r99 差分+r100 极窄终核 APPROVE;零 wire 语义变化)。DS-1=Windows out-of-scope 恒 UNSUPPORTED(正式);DS-2=二值/unknown 禁公司数据/allowlist 空 fail-closed(正式);DS-3=维持 PENDING。
 5. push——未授权(不变);本地 docs/v3-design 仍基于旧 master d29faace。
 6. 消费门 allowlist——fail-closed 不变(FAIL evidence 本就不入消费门)。
+7. **自动化执行形态提案封版(会话 12 后半;用户指令「尽可能自动化,避免我人工介入」)**:`~/Desktop/agentbridge_v3_apply_2026-07/automation/proposal_auto_execution.md` v0.5,SHA-256=65249178c579cd55c9168fb73c2460e0b17867c458bce19a0c6ae4a01e16b48f;五轮对抗(自审+r101 八门/r102 六门/r103 七项/r104 五处→r105 全路 APPROVE)。核心:三级矩阵(T1 tmux 全自动/T2 自动采集+人工终裁/T3)+四象限判据+原子时窗+sidecar 双门+root-owned controller+NOTAFTER 租约+watchdog+设备码凭据默认。**正式批准点=批次 2 card**(用户批 card 即批形态);正常路径人工点=两条 sudo+device-auth 一次+card 批准。残余接受清单=r104 终判节。
 
 ### R.4 NOT-DONE(承接;下会话据此不遗漏)
 
 | # | 待办 | 性质 |
 |---|---|---|
-| 1 | 批次 2(P0A-2+P0A-3)五件套起草+对抗封版+card 批准 | 下会话首件;工件=card/探测插件 v1/v2/本地 marketplace 源/自省 shim/driver;**hook 声明格式待调研**(bundled 无示例)+P0A-3「Desktop 重启」CLI 宿主表述辨析 |
-| 2 | P0A-8 isolated 复跑转正(abprobe 未搭;指引就绪) | 待用户搭 profile+在场 |
+| 1 | 批次 2(P0A-2 条件式 T1+P0A-3 混合)执行包起草+对抗封版+card 批准 | 下会话首件;**按提案 v0.5 封版基准**;工件=card/探测插件 v1/v2/本地 marketplace 源/自省 shim/driver+**自动化工装六件**(setup/teardown/controller/watchdog/verify_sidecars/wrapper);**hook 声明格式待调研**(bundled 无示例)+P0A-3「Desktop 重启」CLI 宿主表述辨析 |
+| 2 | P0A-8 isolated 复跑转正 | **合并批次 2 执行日附带项**(用户裁决:边际价值低不单独跑;判据附录显式重定义+批准;abprobe 用户已存在 uid=502,setup 严格校验复用) |
 | 3 | r98 五建议 reopen 裁决 | 待用户 |
 | 4 | DS-1/2/3 定案 | 待用户;不选=默认 fail-closed |
 | 5 | batch1 evidence 三件是否入 repo | 待用户 |
