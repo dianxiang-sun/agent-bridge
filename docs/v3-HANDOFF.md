@@ -452,11 +452,11 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 > **SSOT 声明**:本 §Q 为唯一 live 段;§P 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
 > 分层 SSOT:架构/协议规格/Phase 0A 准备包锚均不变(见 §P 引言;GV 锚 d80341b0… 全程不变);**批次 1 执行包=`~/Desktop/agentbridge_v3_apply_2026-07/batch1/` 五件(repo 外)——2026-07-18 会话 11 经 Codex 七轮(r88 REJECT P0×2 → r89/r90/r91/r92/r93 逐轮收窄 → r94 全路 APPROVE)封版**;四工件 SHA-256 与双锚记录=ledger 会话 11 台账;操作台账+激活入口=ledger「下会话激活(入口;**v9**)」段(唯一入口;v8 已 SUPERSEDED)。
-> 一句话:会话 11 完成一件——用户选定 (i) Phase 0A 实机探测后,批次 1(P0A-8 UDS proxy 探针,零计费)run card+隔离 profile 指引+forwarder+driver 四工件对抗封版;**run card 待用户批准,实机探测未跑(零计费维持),隔离 profile 未搭建**;ask_codex 载体本会话全程恢复可用。
+> 一句话:会话 11 完成一件——用户选定 (i) Phase 0A 实机探测后,批次 1(P0A-8 UDS proxy 探针,零计费)run card+隔离 profile 指引+forwarder+driver+README **五件**对抗封版;**run card 已获用户批准(原文入 card §1),实机探测未跑(零计费维持),隔离 profile 未搭建**;会话尾经 r95 交接盲审修补;ask_codex 载体本会话全程恢复可用。
 
 ### Q.1 激活(下会话第一步)
 
-读 ledger「下会话激活(入口;v9)」段并按其执行。⚠首件=待用户输入:批准批次 1 run card(→在场执行 P0A-8)或改选 DS-1/2/3。
+读 ledger「下会话激活(入口;v9)」段并按其执行。⚠**首件=执行已批准的批次 1 run card**(非再索批准):isolated 正式跑前置=用户搭 abprobe profile,或先做 degraded 演练(不得 PASS);用户亦可改选 DS-1/2/3(纯纸面)。
 
 ### Q.2 本会话 DONE(带证据)
 
@@ -465,24 +465,43 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 | 1 | 三条路呈现+用户选 (i) | 会话记录;AskUserQuestion 选择 | GOLD |
 | 2 | 批次 1 四工件起草+冒烟(自抓 status 分派缺陷当场修) | batch1/ 文件+scratchpad 冒烟输出 | GOLD |
 | 3 | r88-r94 七轮对抗(全程 ask_codex 同步 RPC,零过滤杀) | 各轮 verdict+artifact 见 ledger 台账;我方 spot-check 复现 P0-1 | GOLD |
-| 4 | **r94 全路 APPROVE 封版** | Codex 封版描述+四文件 SHA-256(三件逐字节一致,run card 双锚 d9c837ac→12276944) | GOLD |
-| 5 | 交接三件套(ledger 台账+入口 v9/本 §Q/memory) | 本次写入 | GOLD |
+| 4 | **r94 全路 APPROVE 封版** | Codex 封版描述+四文件 SHA-256(三件逐字节一致;run card 三锚 d9c837ac→12276944→ead13d71) | GOLD |
+| 5 | **run card 用户批准**(原文「批准 run card ,commit」逐字录入 card §1 userApproval) | card §1;状态行 APPROVED | GOLD |
+| 6 | **commit=2ce3711**(HANDOFF §Q,+46/-5;工作树净;未 push) | `git show -s 2ce3711` | GOLD |
+| 7 | 交接三件套(ledger 台账+入口 v9/本 §Q/memory)+r95 交接盲审修补 | 本次写入;r95 verdict NOT-READY→P1×4 修入 | GOLD |
 
 ### Q.3 状态
 
-1. 批次 1 执行包——**封版且 run card 已获用户批准(2026-07-18,原文「批准 run card ,commit」逐字录入 card §1;批准后 card SHA 见 ledger 双锚)**;approvedExecUser 已冻结 abprobe(precondition 8);可按 card §2 执行(isolated 正式跑待 abprobe profile 搭建;degraded 演练可先行不得 PASS)。
+1. 批次 1 执行包——**封版且 run card 已获用户批准(2026-07-18,原文「批准 run card ,commit」逐字录入 card §1;批准后 card SHA 三锚 d9c837ac→12276944→ead13d71,ledger 会话 11 台账/尾声段)**;执行 OS 用户名冻结于 card `preconditionsChecked[8]`=abprobe;可按 card §2 执行(isolated 正式跑待 abprobe profile 搭建;degraded 演练可先行不得 PASS)。
 2. 隔离 profile——未搭建(指引就绪:batch1/isolation_profile_setup.md;abprobe 用户+codex CLI 登录+合成仓库)。
 3. P0A-8 实机探测——未跑;degraded 演练可先行(不得 PASS)。
 4. spec §15 DS-1/2/3——仍待用户明确选择(不变)。
 5. push——未授权(不变);本地 docs/v3-design 仍基于旧 master d29faace。
-6. 消费门 allowlist——交付态 fail-closed 不变。
+6. 消费门 allowlist——交付态 fail-closed(approved=[]、frozenHostMatrix=null;scripts/phase0a/README.md);解锁须用户在探测批次启动时显式改。
 
-### Q.4 教训(本会话新增;历代继续有效)
+### Q.4 NOT-DONE(承接剩余风险/待办;下会话据此不遗漏)
+
+| # | 待办 | 性质 |
+|---|---|---|
+| 1 | P0A-8 实机探测执行(isolated 前置 abprobe 未搭;degraded 未跑) | 下会话首件;须用户在场 |
+| 2 | 批次 2-6 run card 起草(P0A-2/3→1/9/CB→4/5→6→7;runbook §11 批次序) | 依批次 1 结果 |
+| 3 | DS-1/2/3 定案 | 待用户;不选=默认 fail-closed 安全 |
+| 4 | batch1 五件是否入 repo | 待用户;现 repo 外 |
+| 5 | push docs/v3-design | 禁区;待用户显式批 |
+| 6 | Phase 1A 实现 | 门控于 Phase 0A 证据 |
+| 7 | 「harness provenance 行必需化」提案(r90 不采项 4) | 待用户决定是否 reopen(改封版 scripts/phase0a/) |
+| 8 | evidence 消费 allowlist 解锁 | 待用户探测批次启动时显式改 |
+
+> **不采项区分(r90 五建议)**:采纳 1/3/5(expected-user 门/日志 fd 硬化/内容寻址副本);**不采项 2(driver 接管 forwarder 生命周期)=有意不采**(改 runbook §8.3 人工分步观察形态,非待办);**不采项 4(harness provenance 必需化)=待用户决定**(见上表 #7)。
+> **P0A-8 已知残余(card §6,如实承接)**:①evidence 自由书写威胁模型——恶意执行者可整体伪造,纸面已加固至「诚实误操作难产生 no-probe PASS」,根本解=实机独立见证;②note secret 检测=defense-in-depth 非完备;③forwarder 实例锁仅约束合作实例,非合作 same-UID out-of-scope(architecture §10.4)。
+
+### Q.5 教训(本会话新增;历代继续有效)
 
 1. 优雅关闭是探针/桥类工具的确定性陷阱:断连场景必须 transport.abort(),掉线判据=进程退出+日志+无新增字节(kernel buffer 排空是对端本地伪影)。
 2. 安全加固代码自身就是新攻击面:「修复引入新洞」本会话连环 4 例(锁 open 截断/16MiB 读中增长/publish symlink 覆写/清理假成功),每轮修复必须显式复核「修复引入面」。
-3. sidecar 文件(lock/内容寻址副本)安全三件套:O_NOFOLLOW+O_EXCL(或 link no-replace)+fstat 形态验证,一处不能省。
+3. sidecar 文件安全**分三层**(r95 P2-2 精化,勿泛化为「三件套缺一不可」):①共同基线=O_NOFOLLOW+fstat 形态验证(regular/euid/nlink);②可复用 lock=基线+O_NONBLOCK+flock(不用 O_EXCL);③immutable 内容副本=基线+随机 nonce O_EXCL 临时+link no-replace 原子发布。
 4. 差分循环防无限收敛:验收基线显式化(纸面可修清零+不可解项如实定性=APPROVE)+「纸面可修 vs 定性分歧」分流,r91 起三轮零定性分歧后 r94 自然收敛。
+5. 交接层也须盲审:r95 抓出批准状态 split-brain(改批准态时改漏 ledger 前言/HANDOFF 引言/memory 三处)——状态翻转类修改必须全指针同扫,否则冷启动会读到「待批准」而重复索批。
 
 ---
 
