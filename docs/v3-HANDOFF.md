@@ -451,7 +451,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 ## Q. 会话 11 收尾(2026-07-18)— 批次 1(P0A-8)执行包七轮对抗封版【最新 LIVE 段】
 
 > **SSOT 声明**:本 §Q 为唯一 live 段;§P 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
-> 分层 SSOT:架构/协议规格/Phase 0A 准备包锚均不变(见 §P 引言;GV 锚 d80341b0… 全程不变);**批次 1 执行包=`~/Desktop/agentbridge_v3_apply_2026-07/batch1/` 五件(repo 外)——2026-07-18 会话 11 经 Codex 七轮(r88 REJECT P0×2 → r89/r90/r91/r92/r93 逐轮收窄 → r94 全路 APPROVE)封版**;四工件 SHA-256 与双锚记录=ledger 会话 11 台账;操作台账+激活入口=ledger「下会话激活(入口;**v9**)」段(唯一入口;v8 已 SUPERSEDED)。
+> 分层 SSOT:架构/协议规格/Phase 0A 准备包锚均不变(见 §P 引言;GV 锚 d80341b0… 全程不变);**批次 1 执行包=`~/Desktop/agentbridge_v3_apply_2026-07/batch1/` 五件(repo 外)——2026-07-18 会话 11 经 Codex 七轮(r88 REJECT P0×2 → r89/r90/r91/r92/r93 逐轮收窄 → r94 全路 APPROVE)封版**;五件当前 SHA-256(card/README=三锚链,其余三件=单锚)=ledger 会话 11 台账;操作台账+激活入口=ledger「下会话激活(入口;**v9**)」段(唯一入口;v8 已 SUPERSEDED)。
 > 一句话:会话 11 完成一件——用户选定 (i) Phase 0A 实机探测后,批次 1(P0A-8 UDS proxy 探针,零计费)run card+隔离 profile 指引+forwarder+driver+README **五件**对抗封版;**run card 已获用户批准(原文入 card §1),实机探测未跑(零计费维持),隔离 profile 未搭建**;会话尾经 r95 交接盲审修补;ask_codex 载体本会话全程恢复可用。
 
 ### Q.1 激活(下会话第一步)
