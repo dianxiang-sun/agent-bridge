@@ -448,9 +448,63 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
 4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
 
-## Q. 会话 11 收尾(2026-07-18)— 批次 1(P0A-8)执行包七轮对抗封版【最新 LIVE 段】
+## R. 会话 12 收尾(2026-07-18)— 批次 1(P0A-8)执行闭环:degraded FAIL(真实负观察)+r98 收敛+口径 A【最新 LIVE 段】
 
-> **SSOT 声明**:本 §Q 为唯一 live 段;§P 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
+> **SSOT 声明**:本 §R 为唯一 live 段;§Q 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
+> 分层 SSOT:架构/协议规格/Phase 0A 准备包/批次 1 执行包锚均不变(五件 SHA=ledger 会话 11 台账;GV 锚 d80341b0… 不变);**批次 1 执行产物=`batch1/evidence/` 三件(repo 外)**;操作台账+激活入口=ledger「下会话激活(入口;**v10**)」段(v9 已 SUPERSEDED)。
+> 一句话:会话 12 完成一件——已批准的批次 1 run card 以 **degraded 演练**形态执行完毕(用户选路),**status=FAIL(harness 判;reconnectOk=false 真实负观察:codex TUI 0.144.5 对 remote transport 断线无重连逻辑,报错即终会话)**,validate 五门 ACCEPT+我方人工核+Codex r98 独立消费评审(598s)三层全过收敛;**用户裁登记口径 A=两层**(degraded FAIL 即刻作 Phase 0B 设计输入 `phase_0b_blocked: keep ws://` 保守侧;正式 Phase 0A evidence 待 abprobe isolated 复跑转正);批次 2(P0A-2/3)事实基座已核实备齐,五件套起草留下会话。
+
+### R.1 激活(下会话第一步)
+
+读 ledger「下会话激活(入口;v10)」段并按其执行。⚠首件=**批次 2(P0A-2+P0A-3)执行包起草**(同 r88-r94 工作流:五件套起草→Codex 对抗→封版→用户批准;计费面 none~low(≤2 turns) 须 card 批准);用户亦可改选:搭 abprobe 后 P0A-8 isolated 复跑转正 / DS-1/2/3 定案(纯纸面)。
+
+### R.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | 入口 v9 核验 ALL_CHECKS_PASS 17/17+必读集全量 | 会话记录;exact HEAD 947acf15 | GOLD |
+| 2 | 用户选 degraded 演练先行 | AskUserQuestion 选择 | GOLD |
+| 3 | P0A-8 四步探测执行(W1-W3 窗口纪律;零计费零 abort) | forwarder 日志 62a05756…(580B)+daemon healthz threadId 轮换×2 | GOLD |
+| 4 | **status=FAIL**(harness 谓词;真实负观察)+validate exit 0 五门 ACCEPT | evidence f76c1050…json+artifact 955c0e98…jsonl(2864B) | GOLD |
+| 5 | 消费评审三层:人工核(六件 SHA16 全等/身份↔隔离一致/日志锚)+**r98 Codex 同意 FAIL** | r98 消息(11 条,独立重算 relisten_gap=13.524s/117.9s 零重连) | GOLD |
+| 6 | **用户裁登记口径 A(两层)** | AskUserQuestion 选择 | GOLD |
+| 7 | 批次 2 事实基座(plugin 子命令/本地 marketplace/manifest+.mcp.json 格式/memories 全关) | 命令输出(ledger 会话 12 台账内联) | GOLD |
+| 8 | 交接三件套(ledger 台账+入口 v10/本 §R/memory) | 本次写入 | GOLD |
+
+### R.3 状态
+
+1. **P0A-8:degraded FAIL 已登记为 Phase 0B 设计输入**(口径 A)——`phase_0b_blocked: keep ws://127.0.0.1 experimental compat path`(spec §14.3 fallbackOnFail 逐字);**Phase 0B UDS 迁移在现有 TUI 行为下不可执行**;设计含义=不移除 WS fallback、不假设 UDS 断线自愈。正式 Phase 0A evidence 待 isolated 复跑(abprobe 未搭;hostMatrix 冻结 codex-cli 0.144.5/macOS 26.5,宿主升级=作废重探)。
+2. 批次 1 封版包(五件)不变;evidence 三件 repo 外(batch1/evidence/;是否入 repo 待用户)。
+3. r98 五建议=reopen 提案面(涉改封版 driver/harness/runbook),待用户决定,不即兴动:①isolated 复跑自动存 TUI stderr/exit code;②provenance 追加 driver/forwarder/daemon/codex 版本锚;③reconnect 机器可判窗口;④FAIL/INCONCLUSIVE 分派机器化(r98 实证 validator 只证「非 PASS」);⑤Phase 0B 断线产品行为定义。
+4. spec §15 DS-1/2/3——仍待用户(不变)。
+5. push——未授权(不变);本地 docs/v3-design 仍基于旧 master d29faace。
+6. 消费门 allowlist——fail-closed 不变(FAIL evidence 本就不入消费门)。
+
+### R.4 NOT-DONE(承接;下会话据此不遗漏)
+
+| # | 待办 | 性质 |
+|---|---|---|
+| 1 | 批次 2(P0A-2+P0A-3)五件套起草+对抗封版+card 批准 | 下会话首件;工件=card/探测插件 v1/v2/本地 marketplace 源/自省 shim/driver;**hook 声明格式待调研**(bundled 无示例)+P0A-3「Desktop 重启」CLI 宿主表述辨析 |
+| 2 | P0A-8 isolated 复跑转正(abprobe 未搭;指引就绪) | 待用户搭 profile+在场 |
+| 3 | r98 五建议 reopen 裁决 | 待用户 |
+| 4 | DS-1/2/3 定案 | 待用户;不选=默认 fail-closed |
+| 5 | batch1 evidence 三件是否入 repo | 待用户 |
+| 6 | push docs/v3-design | 禁区;待用户显式批 |
+| 7 | FAIL 回改设计(§14.3:architecture §16 Phase 0B 条目按 fallback 处理)——封版件修订另行 APPLY | 依口径 A 设计输入;修订流程待启 |
+| 8 | 「harness provenance 必需化」提案(r90 不采项 4,§Q 承接) | 待用户 |
+
+### R.5 教训(本会话新增;历代继续有效)
+
+1. 探测窗口与审核载体共用 daemon 时须显式窗口纪律(W1 零 ask_codex/W2 队列清零/W3 日常 TUI 暂退)——注入面=计费污染源,执行侧补足,不改封版设计。
+2. 「validator ACCEPT」≠「业务 PASS」:封版全链只证 evidence 合法+「非 PASS」;FAIL/INCONCLUSIVE 精确分派=card §3+driver+人工评审共同责任(r98 内存改写复验实证)。
+3. degraded 演练对宿主二进制固有行为类负观察有强设计输入效力;正式 gate 纪律不因此放宽——两层口径并存是正解。
+4. 负观察佐证要多通道(healthz threadId/字节计数/日志时间线);operator note 单通道留证据等级缺口。
+
+---
+
+## Q. 会话 11 收尾(2026-07-18)— 批次 1(P0A-8)执行包七轮对抗封版【SUPERSEDED BY §R】
+
+> **SSOT 声明**:本 §Q 为唯一 live 段;§P 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。⚠此声明为历史文本,现行 live=§R。
 > 分层 SSOT:架构/协议规格/Phase 0A 准备包锚均不变(见 §P 引言;GV 锚 d80341b0… 全程不变);**批次 1 执行包=`~/Desktop/agentbridge_v3_apply_2026-07/batch1/` 五件(repo 外)——2026-07-18 会话 11 经 Codex 七轮(r88 REJECT P0×2 → r89/r90/r91/r92/r93 逐轮收窄 → r94 全路 APPROVE)封版**;五件当前 SHA-256(card/README=三锚链,其余三件=单锚)=ledger 会话 11 台账;操作台账+激活入口=ledger「下会话激活(入口;**v9**)」段(唯一入口;v8 已 SUPERSEDED)。
 > 一句话:会话 11 完成一件——用户选定 (i) Phase 0A 实机探测后,批次 1(P0A-8 UDS proxy 探针,零计费)run card+隔离 profile 指引+forwarder+driver+README **五件**对抗封版;**run card 已获用户批准(原文入 card §1),实机探测未跑(零计费维持),隔离 profile 未搭建**;会话尾经 r95 交接盲审修补;ask_codex 载体本会话全程恢复可用。
 
