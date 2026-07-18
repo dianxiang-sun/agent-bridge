@@ -448,11 +448,49 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
 4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
 
-## P. 会话 10 收尾(2026-07-17)— Phase 0A 纸面准备包 v0.4 封版【最新 LIVE 段】
+## Q. 会话 11 收尾(2026-07-18)— 批次 1(P0A-8)执行包七轮对抗封版【最新 LIVE 段】
+
+> **SSOT 声明**:本 §Q 为唯一 live 段;§P 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
+> 分层 SSOT:架构/协议规格/Phase 0A 准备包锚均不变(见 §P 引言;GV 锚 d80341b0… 全程不变);**批次 1 执行包=`~/Desktop/agentbridge_v3_apply_2026-07/batch1/` 五件(repo 外)——2026-07-18 会话 11 经 Codex 七轮(r88 REJECT P0×2 → r89/r90/r91/r92/r93 逐轮收窄 → r94 全路 APPROVE)封版**;四工件 SHA-256 与双锚记录=ledger 会话 11 台账;操作台账+激活入口=ledger「下会话激活(入口;**v9**)」段(唯一入口;v8 已 SUPERSEDED)。
+> 一句话:会话 11 完成一件——用户选定 (i) Phase 0A 实机探测后,批次 1(P0A-8 UDS proxy 探针,零计费)run card+隔离 profile 指引+forwarder+driver 四工件对抗封版;**run card 待用户批准,实机探测未跑(零计费维持),隔离 profile 未搭建**;ask_codex 载体本会话全程恢复可用。
+
+### Q.1 激活(下会话第一步)
+
+读 ledger「下会话激活(入口;v9)」段并按其执行。⚠首件=待用户输入:批准批次 1 run card(→在场执行 P0A-8)或改选 DS-1/2/3。
+
+### Q.2 本会话 DONE(带证据)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | 三条路呈现+用户选 (i) | 会话记录;AskUserQuestion 选择 | GOLD |
+| 2 | 批次 1 四工件起草+冒烟(自抓 status 分派缺陷当场修) | batch1/ 文件+scratchpad 冒烟输出 | GOLD |
+| 3 | r88-r94 七轮对抗(全程 ask_codex 同步 RPC,零过滤杀) | 各轮 verdict+artifact 见 ledger 台账;我方 spot-check 复现 P0-1 | GOLD |
+| 4 | **r94 全路 APPROVE 封版** | Codex 封版描述+四文件 SHA-256(三件逐字节一致,run card 双锚 d9c837ac→12276944) | GOLD |
+| 5 | 交接三件套(ledger 台账+入口 v9/本 §Q/memory) | 本次写入 | GOLD |
+
+### Q.3 状态
+
+1. 批次 1 执行包——**封版且 run card 已获用户批准(2026-07-18,原文「批准 run card ,commit」逐字录入 card §1;批准后 card SHA 见 ledger 双锚)**;approvedExecUser 已冻结 abprobe(precondition 8);可按 card §2 执行(isolated 正式跑待 abprobe profile 搭建;degraded 演练可先行不得 PASS)。
+2. 隔离 profile——未搭建(指引就绪:batch1/isolation_profile_setup.md;abprobe 用户+codex CLI 登录+合成仓库)。
+3. P0A-8 实机探测——未跑;degraded 演练可先行(不得 PASS)。
+4. spec §15 DS-1/2/3——仍待用户明确选择(不变)。
+5. push——未授权(不变);本地 docs/v3-design 仍基于旧 master d29faace。
+6. 消费门 allowlist——交付态 fail-closed 不变。
+
+### Q.4 教训(本会话新增;历代继续有效)
+
+1. 优雅关闭是探针/桥类工具的确定性陷阱:断连场景必须 transport.abort(),掉线判据=进程退出+日志+无新增字节(kernel buffer 排空是对端本地伪影)。
+2. 安全加固代码自身就是新攻击面:「修复引入新洞」本会话连环 4 例(锁 open 截断/16MiB 读中增长/publish symlink 覆写/清理假成功),每轮修复必须显式复核「修复引入面」。
+3. sidecar 文件(lock/内容寻址副本)安全三件套:O_NOFOLLOW+O_EXCL(或 link no-replace)+fstat 形态验证,一处不能省。
+4. 差分循环防无限收敛:验收基线显式化(纸面可修清零+不可解项如实定性=APPROVE)+「纸面可修 vs 定性分歧」分流,r91 起三轮零定性分歧后 r94 自然收敛。
+
+---
+
+## P. 会话 10 收尾(2026-07-17)— Phase 0A 纸面准备包 v0.4 封版【SUPERSEDED BY §Q】
 
 > **SSOT 声明**:本 §P 为唯一 live 段;§O 及更早段 SUPERSEDED(§F/§G 锁定决策、§J.5/§K.5/§L.4/§M.4/§N.4/§O.4 教训、**§K.4 授权口径**继续有效)。
-> 分层 SSOT:架构=`docs/v3-architecture.md`(v0.10 封版,SHA d40fc07c…,不变);协议规格=`docs/v3-protocol-spec.md`(v0.12.18+companion,SHA de56247a…,不变;GV 锚 d80341b0… 全程不变);**Phase 0A 执行细则=`docs/phase0a-runbook.md`(DRAFT v0.4 封版,SHA16 4064e66c…)+harness=`scripts/phase0a/` 11 件(selftest 94 项全绿)——两者 2026-07-17 会话 10 经 Codex 四轮(r82b REJECT P0×6→r83 部分收割+3 新 finding→r84 REJECT 窄 P1×1→r85 全项 APPROVE)封版,截至本会话尾 untracked 待 commit(已提请用户)**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v8)」段)。
-> 一句话:会话 10 完成一件——Phase 0A 纸面准备包(runbook v0.4+harness)对抗封版;期间 r82b 结果自上会话中断处 rollout 收割、r83/r85 两次载体层异常均核盘收割无损;DS-1..3 按禁区跳过;实机探测未触(零计费)。
+> 分层 SSOT:架构=`docs/v3-architecture.md`(v0.10 封版,SHA d40fc07c…,不变);协议规格=`docs/v3-protocol-spec.md`(v0.12.18+companion,SHA de56247a…,不变;GV 锚 d80341b0… 全程不变);**Phase 0A 执行细则=`docs/phase0a-runbook.md`(DRAFT v0.4 封版,SHA16 4064e66c…)+harness=`scripts/phase0a/` 11 件(核心 validate.py SHA16 6fd0282f…;selftest 94 项全绿)——两者 2026-07-17 会话 10 经 Codex 四轮(r82b REJECT P0×6→r83 部分收割+3 新 finding→r84 REJECT 窄 P1×1→r85 全项 APPROVE)封版,已 commit=b13d526(23 文件入 docs/v3-design,未 push);仅本文件 §P 交接维护更新留 M 未 commit**;操作台账+激活入口=`~/Desktop/agentbridge_v3_apply_2026-07/ledger.md`(唯一激活入口;现行=「下会话激活(入口;v8)」段)。⚠**spec 头部历史防护(结转自 §O)**:spec 头部「未 commit/architecture v0.9=fec2285」为封版前历史元数据,操作事实以 b13d526/architecture v0.10/本 §P 为准。
+> 一句话:会话 10 完成一件——Phase 0A 纸面准备包(runbook v0.4+harness)对抗封版;期间 r82b 结果自上会话中断处 rollout 收割、r83 已产出的部分结果无损收割(未判项由 r84 补判)、r85 完整终签无损收割;DS-1..3 按禁区跳过;实机探测未触(零计费)。
 
 ### P.1 激活(下会话第一步)
 
@@ -462,21 +500,24 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 | # | 事项 | 证据 | 等级 |
 |---|---|---|---|
-| 1 | r82b 结果收割(上会话中断的红队轮) | rollout 02-18-49-019f6c27…(五路);verdict REJECT P0×6+P1×5+P2×1;我方抽查 5/5 复现 | GOLD |
+| 1 | r82b 结果收割(上会话中断的红队轮) | rollout 02-18-49-019f6c27…(多路,主协调路+子路);verdict REJECT P0×6+P1×5+P2×1;我方抽查 5/5 复现 | GOLD |
 | 2 | v0.2 修入(12 findings)+selftest 84 项 | ledger 会话 10 台账;修复期自抓新洞 1 例(allowlist 缺键) | GOLD |
 | 3 | r83 部分收割(载体被杀)→3 新 finding 复现 | rollout 019f6f88…两线程;bool/int 混淆+非对象 traceback+raw-source 无绑定,3/3 我方复现 | GOLD |
 | 4 | v0.3 修入(strict_deep_equal/守卫/RAWSOURCE 门)93 项 | ledger;GV 锚不变 | GOLD |
 | 5 | r84 完整差分(REJECT 窄:F1 宿主重启相位 P1+F2 字段漂移 P3) | codex task-mrosm6k1 result 全文;我方抽查 spec:2306/runbook:462/:120 属实 | GOLD |
 | 6 | v0.4 修入(HOSTRESTART 门+host_instance 行+§1.7 修正)94 项 | ledger;observed/模板不变 | GOLD |
 | 7 | **r85 全项 APPROVE:准备包封版** | rollout 019f6fb1…完整终签(载体挂死,核盘收割);F1×7+F2×2 全 FIXED+7 边界回归;我方抽查行号 4/4 | GOLD |
+| 8 | 用户 APPLY commit=**b13d526**(23 文件=docs 2+scripts/phase0a 21,入 docs/v3-design;未 push) | `git show --stat b13d526`=23 files changed | GOLD |
+| 9 | **运行时插曲**:default bridge「打不开」诊断(非本会话所致) | 只读诊断;根因=老连接今晨 01:45 掉线+新 claude 未重连;我方 git/mtime 自证零运行时改动;修复命令已给(用户会话后 `abg-restart ~` 自行执行);详 ledger「会话 10 运行时插曲」段 | GOLD |
 
 ### P.3 状态
 
-1. Phase 0A 纸面准备包——**v0.4 封版**;runbook+scripts/phase0a/ 为 untracked,**commit 已提请用户**(连同本文件 M 状态)。
+1. Phase 0A 纸面准备包——**v0.4 封版且已 commit(b13d526)**;工作树仅本文件因会话10尾 §P 交接更新留 M 未 commit(commit 另批)。
 2. Phase 0A 实机探测——未触;执行须用户在场+runbook §11 run card 逐项批准(计费敏感 P0A-4/5/6/7/CB)。
 3. spec §15 DS-1/2/3——仍待用户明确选择(不变)。
 4. push——未授权(不变);本地 docs/v3-design 仍基于旧 master d29faace(rebase=另一次 Git 写授权)。
 5. 消费门 allowlist——交付态 fail-closed(approved=[]、matrix=null),解锁=用户探测批次启动时显式改。
+6. **bridge 载体**——本会话 default 通道桥接层不通(ask_codex 未接入,Codex 协作全程走 codex 插件 rescue);**用户关本会话后在外部终端 `abg-restart ~` 重开 default 通道**(只动 default,git/文件不受影响);下会话=重开后新 claude,先探 ask_codex 是否恢复,恢复用之、否则续用 rescue。
 
 ### P.4 教训(本会话新增;历代教训继续有效)
 
