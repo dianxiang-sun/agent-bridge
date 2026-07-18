@@ -452,11 +452,11 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 > **SSOT 声明**:本 §R 为唯一 live 段;§Q 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
 > 分层 SSOT:架构/协议规格(**v0.12.19**)/Phase 0A 准备包/批次 1 执行包/**自动化执行形态提案 v0.5**锚均见 ledger v11 核验块(GV 锚 d80341b0… 不变);**批次 1 执行产物=`batch1/evidence/` 三件(repo 外)**;操作台账+激活入口=ledger「下会话激活(入口;**v11**)」段(v10 已 SUPERSEDED)。
-> 一句话:会话 12 完成**四件**——①批次 1 run card 以 degraded 演练执行闭环(用户选路),**status=FAIL(harness 证 evidence 合法+非 PASS;FAIL 精确分派=card §3+driver+独立消费评审共同成立——真实负观察:codex TUI 0.144.5 对 remote transport 断线无重连逻辑,报错即终会话)**,validate 五门 ACCEPT+人工核+Codex r98(598s)三层收敛,**用户裁口径 A 两层**(degraded FAIL 即刻作 Phase 0B 设计输入 `phase_0b_blocked` 保守侧);②**DS-1/2 定案+DS-3 暂缓→spec v0.12.19**(commit 3b4c174,r99/r100);③**自动化执行形态提案 v0.5 五轮对抗封版**(r101-r105 APPROVE,见 R.3 #7);④P0A-8 isolated 转正**合并批次 2 执行日**(用户裁,非单独跑)。批次 2 起草基准与事实基座全备,留下会话。
+> 一句话:会话 12 完成**四件**——①批次 1 run card 以 degraded 演练执行闭环(用户选路),**status=FAIL(harness 证 evidence 合法+非 PASS;FAIL 精确分派=card §3+driver+独立消费评审共同成立——真实负观察:codex TUI 0.144.5 对 remote transport 断线无重连逻辑,报错即终会话)**,validate 五门 ACCEPT+人工核+Codex r98(598s)三层收敛,**用户裁口径 A 两层**(degraded FAIL 即刻作 Phase 0B 设计输入 `phase_0b_blocked` 保守侧);②**DS-1/2 定案+DS-3 暂缓→spec v0.12.19**(commit 3b4c174,r99/r100);③**自动化执行形态提案 v0.5 五轮对抗封版**(r101-r104 REJECT 收敛→r105 APPROVE,见 R.3 #7);④P0A-8 isolated 转正**合并批次 2 执行日**(用户裁,非单独跑)。批次 2 起草基准与事实基座全备,留下会话。
 
 ### R.1 激活(下会话第一步)
 
-读 ledger「下会话激活(入口;v11)」段并按其执行。⚠首件=**批次 2(P0A-2 条件式 T1+P0A-3 混合)执行包起草**——**按自动化执行形态提案 v0.5(封版基准,见 R.3 #7)起草**,交付含 setup/teardown/controller/watchdog/verify_sidecars/wrapper 工装;同 r88-r94 工作流对抗→封版→用户批准 card(计费面 none~low(≤2 turns);批 card 即批自动化形态);P0A-8 isolated 转正复跑=批次 2 执行日附带项(判据附录显式重定义)。
+读 ledger「下会话激活(入口;v11)」段并按其执行。⚠首件=**批次 2(P0A-2 条件式 T1+P0A-3 混合)执行包起草**——**按自动化执行形态提案 v0.5(封版基准,见 R.3 #7)起草**,交付含 setup/teardown/controller/watchdog/verify_sidecars/wrapper/pipe-pane 留档**七件**工装;同 r88-r94 工作流对抗→封版→用户批准 card(计费面 none~low(≤2 turns);批 card 即批自动化形态);P0A-8 isolated 转正复跑=批次 2 执行日附带项(判据附录显式重定义)。
 
 ### R.2 本会话 DONE(带证据)
 
@@ -490,8 +490,8 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 |---|---|---|
 | 1 | 批次 2(P0A-2 条件式 T1+P0A-3 混合)执行包起草+对抗封版+card 批准 | 下会话首件;**按提案 v0.5 封版基准**;工件=card/探测插件 v1/v2/本地 marketplace 源/自省 shim/driver+**自动化工装七件**(setup/teardown/controller/watchdog/verify_sidecars/wrapper/pipe-pane 留档工装——提案 §8);**batch2 setup 硬门补:/Users/Shared/ab-probe-out 现 0777 须收权(evidence 完整性,r106)**;**hook 声明格式待调研**(bundled 无示例)+P0A-3「Desktop 重启」CLI 宿主表述辨析 |
 | 2 | P0A-8 isolated 复跑转正 | **合并批次 2 执行日附带项**(用户裁决:边际价值低不单独跑;判据附录显式重定义+批准;abprobe 用户已存在 uid=502,setup 严格校验复用) |
-| 3 | r98 建议残余 reopen 裁决(④分派机器化/⑤Phase 0B 产品行为/⑥env_snapshot 键封闭——①②③已进 v0.5,见 R.3 #3) | 待用户 |
-| 4 | DS-3 定案(DS-1/2 已定案,见 R.3 #4) | 待用户;批次 3 P0A-CB 探测后再议;不选=默认 fail-closed |
+| 3 | r98 建议残余 reopen 裁决(④分派机器化/⑤Phase 0B 产品行为/⑥env_snapshot 键封闭——①③已进 v0.5,②部分进入余项由 card 落地,见 R.3 #3) | 待用户 |
+| 4 | DS-3 定案(DS-1/2 已定案,见 R.3 #4) | 待用户后续另行裁决;维持 PENDING,未裁前按默认 fail-closed(不绑定任何批次/探测时序——用户原文仅「暂缓」) |
 | 5 | batch1 evidence 三件是否入 repo | 待用户 |
 | 6 | push docs/v3-design | 禁区;待用户显式批 |
 | 7 | FAIL 回改设计(§14.3:architecture §16 Phase 0B 条目按 fallback 处理)——封版件修订另行 APPLY | 依口径 A 设计输入;修订流程待启 |
