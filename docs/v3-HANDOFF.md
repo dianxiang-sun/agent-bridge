@@ -4,8 +4,8 @@
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
 > **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.10,2026-07-17 封版)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> ⚠**CURRENT LIVE ENTRYPOINT = §R.1**(2026-07-19 会话 12 收尾起;**批次 1(P0A-8)执行闭环 degraded FAIL+DS-1/2 定案(spec v0.12.19)+自动化执行形态提案 v0.5 封版(r105 APPROVE);下会话首件=批次 2 执行包起草(按提案 v0.5 基准)**)。下会话激活唯一入口是 **§R**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v11**;v10 及更早 SUPERSEDED);**§A–§Q 的状态与行动段均为历史快照**(§Q 为会话 11 时点,已被 §R supersede),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
-> **恢复顺序(现行)**:直接读 §R(§R.1 激活 → §R.2 DONE → §R.3 状态 → §R.4 NOT-DONE → §R.5 教训;**§K.4 授权口径与历代教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除后段明示替换处)仍有效。
+> ⚠**CURRENT LIVE ENTRYPOINT = §S.1**(2026-07-20 会话 15 收尾起;**批次 2(P0A-2 单项)执行包 r109→r118 十轮对抗封版 SEALED(修复引入回归 17 例全 Codex 抓回;CD14=best-effort M1 monitor+用户裁边界;用户已裁路径 A);剩:用户填 userApproval(机器锚=matrix cardSha256 d6ecffd8…)→实机执行(用户在场)**)。下会话激活唯一入口是 **§S**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v14**;v13 及更早 SUPERSEDED);**§A–§R 的状态与行动段均为历史快照**(§R 为会话 12 时点,已被 §S supersede),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
+> **恢复顺序(现行)**:直接读 §S(§S.1 激活 → §S.2 DONE → §S.3 状态 → §S.4 NOT-DONE → §S.5 教训;**§K.4 授权口径与历代教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除后段明示替换处)仍有效。
 > ~~恢复顺序(§J 时点,SUPERSEDED by §K,勿执行):读 §J(§J.1→§J.5)~~
 > ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
@@ -448,7 +448,64 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
 4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
 
-## R. 会话 12 收尾(2026-07-18)— 批次 1(P0A-8)执行闭环:degraded FAIL(真实负观察)+r98 收敛+口径 A【最新 LIVE 段】
+## S. 会话 13-15 收尾(2026-07-19/20)— 批次 2(P0A-2 单项)执行包:r109→r118 十轮对抗封版 SEALED;待用户 userApproval+实机【最新 LIVE 段】
+
+> **SSOT 声明**:本 §S 为唯一 live 段;§R 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
+> 分层 SSOT:spec v0.12.19/architecture v0.10/Phase 0A 准备包/批次 1 执行包 r94/提案 v0.5 r105 均封版不变(锚见 ledger);**批次 2 执行包工件全集=`~/Desktop/agentbridge_v3_apply_2026-07/batch2/`**(APPLY 非 git);操作台账+激活入口=ledger「下会话激活(入口;**v14**)」段(v13 及更早 SUPERSEDED)。
+> 一句话:批次 2 P0A-2 执行包经 **r109→r118 十轮 Codex 对抗/确认**(修复引入回归共 **17 例**,每例 Codex 独立抓回+复现变回归用例),CD14 从「机器证明 billing-none」诚实降级为 **best-effort M1 monitor+用户裁边界**;**用户已裁路径 A(接受 best-effort+批 card+实机执行)**;会话 15 fresh session 完成 r116(抓第 17 例 CD18-shlex fail-open)→r117→r118 **READY-FOR-SEAL** 确认链并 **card 封版(SEALED)**。剩:用户填 userApproval(机器锚=matrix cardSha256)→实机执行(用户在场窗口;UNVERIFIED-RUNTIME 项首跑验)。
+
+### S.1 激活(下会话第一步)
+
+读 ledger「下会话激活(入口;v14)」段并原样实跑其 fail-closed 核验块。⚠会话 14 曾发生一次 fabricate 工具输出(收束时编造 SHA 写入声明,Read 证伪)——**每个 SHA/状态必须真实命令观察 function_result**,恢复第一动作永远是核验块实跑非信任交接值。首件视用户动作而定:①用户已填 card §1 userApproval(原文含 APPROVED+`cardSha256=d6ecffd8daad115a8b779ca176ef5d673d6cae2f6f24368587baa8bc7b5a5103`)→按 card §4 时序准备实机(用户在场:sudo setup/device-auth/trust accept/P0A-8 y/n);②未填→催办或按用户新指示。
+
+### S.2 DONE(带证据;会话 13-15 合并)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | 批次 2 执行包起草(P0A-2 单项;工装九件+driver+插件 v1/v2+本地 marketplace) | batch2/ 工件全集+ledger 会话 13 台账 | GOLD |
+| 2 | P0A-3 scope 收窄决策件(desktop_restart_resume 宿主锚不匹配移出) | p0a3_scope_decision.md(7487f789…);批 card 即批收窄 | GOLD |
+| 3 | r109(REJECT 24)→r110(REJECT)结构修订+执行链闭合 | r109_disposition_matrix.md 逐条处置 | GOLD |
+| 4 | r111→r115 五轮深度红队:威胁模型 M1/M2 重定位/HOOKS-002 精确 argv/pane_run 根因/T11 installed/CD17/CD20/CD18/CD19/T13/T12 全处置 | matrix r111-r115 段;16 例回归全 Codex 抓回 | GOLD |
+| 5 | **CD14 威胁模型演进定案**:机器证明→best-effort M1 monitor+用户裁边界(Codex r115「诚实可呈用户裁」) | card §5 三层+残余边界;USER_DECISION_BRIEF | GOLD |
+| 6 | **用户裁路径 A**(billing-none best-effort 强度+P0A-3 收窄+自动化形态+实机批准四项一体) | 会话 14 用户原文;BRIEF 决策 1-4 | GOLD |
+| 7 | 会话 15 恢复核验:入口 v13 块原样实跑 ALL_CHECKS_PASS | HEAD=14c31b0/三 SHA/selfcheck/9 单测真实观察 | GOLD |
+| 8 | **r116 窄确认:CD19/T13/T12/doc CONFIRMED+抓第 17 例 CD18-shlex fail-open**(单测网盲区:异常分支) | Codex 复现 FAIL_OPEN_EXCLUDED=True;Claude 亲核亲跑属实 | GOLD |
+| 9 | 第 17 例修复:CD18-shlex→StepAbort(A8/CD2 纪律)+docstring RETIRED 注+同型排查(probe_anchor/:456 轮询/billing 无 shlex)+tests/unit_r116.py 四用例 | 全套 10 单测 ALL_PASS+selfcheck OK | GOLD |
+| 10 | **r117(A/C/D CONFIRMED,file-history 真实 diff 仅两 hunk+AST 零引用)→:98 末句修正→r118 READY-FOR-SEAL(逆向 diff 证单行)** | r116-r118 消息链+matrix 补记段 | GOLD |
+| 11 | **card 封版 SEALED**:§10 全件真实 SHA 冻结+frozen_manifest.txt(43 行)+p0a8_manifest_frozen.txt(五件与 ledger 会话 11/12 零漂移) | 封版态 card SHA=849e56049e4f961d13414ee79634742dc95821263733f5907befa0d7a6f68524 | GOLD |
+
+### S.3 状态
+
+1. **封版 SHA 锚(会话 15 现场实算)**:card(userApproval 占位态)=849e5604…8524;driver=19fd03fbbd1dc118e65f6224296ab0247fd7013873f4a0b6f2e111462595863c;billing_probe=78bc09c3…4205e(未动);matrix=f6522c35…a6e3;frozen_manifest=81bdd606…461a;p0a8_manifest=51954959…e831;sidecar matrix 文件=d6fad77b…c6d2(其内 cardSha256=d6ecffd8…=**driver P16 机器批准锚**)。
+2. **userApproval 机制(防歧义,r117 前发现)**:driver :1201-1204 核 approval 文件含 `userApproval`+`APPROVED`+`cardSha256=<64hex>` 且**等于 matrix 的 d6ecffd8…**——非 card 文件本体 SHA(自引用不可行)。card 文件封版态 SHA 只作人类审计锚(记 ledger v14)。
+3. **billingSurface:none 定位(用户已接受)**:planned billingSurface:none, best-effort monitored;残余边界=CD14-006 I/O false-negative/operator window 单层退化/P0A-8 覆盖外/CD18 两点快照竞态(card §5 逐条)。
+4. **[UNVERIFIED-RUNTIME] 实机首跑验**(不符=fail-closed abort,可用性风险非安全):hook 展开 argv 布局+版本化路径结构/`--json` schema(marketplace `marketplaces`/plugin `installed`)/hooks list wire 字段/rollout schema 键名。
+5. s8 已裁两层口径①:local 分发无 refresh 路径→机器派生 `unsupported_for_local`∉spec 允许集→P0A-2 判 FAIL 作 F6 真实发现(批 card 即批口径)。
+6. REPO 会话 13-15 零代码改动;本 §S 为唯一 REPO 改动(commit 待用户批,不 push;push-gated)。
+7. P0A-8 isolated 转正=批次 2 执行日附带段(card §7 附录 A1;计费面=批次 1 口径,CD14 覆盖外)。
+
+### S.4 NOT-DONE(承接)
+
+| # | 待办 | 性质 |
+|---|---|---|
+| 1 | 用户填 card §1 userApproval(原文含 APPROVED+cardSha256=d6ecffd8…) | **用户本人动作;审批不代填** |
+| 2 | 本 §S commit(docs/v3-design 分支,不 push) | 待用户批 |
+| 3 | 实机执行(card §4 时序:sudo setup/device-auth/trust accept 操作窗/P0A-8 四步 y/n+driver --arm 双闸) | 需用户正式批+在场窗口 |
+| 4 | UNVERIFIED-RUNTIME 四组实机首跑对齐 | 执行日;不符=abort 非假 PASS |
+| 5 | r98 建议残余(④FAIL/INCONCLUSIVE 分派机器化/⑤Phase 0B 产品行为/⑥env_snapshot 键封闭)+DS-3 定案+batch1 evidence 入 repo+push——均沿 §R.4 待用户 | 待用户 |
+| 6 | 执行日后:evidence 消费评审(人工+Codex,W1 窗口外)+HANDOFF §T/ledger v15 收束 | 执行日 |
+
+### S.5 教训(本 arc 新增;历代继续有效)
+
+1. **修复引入回归 17 例**(r109→r118;T11/CD17/CD20/CD18×2/CD19 等):安全敏感执行包上「修复必差分复核+独立确认轮」不是仪式——r116 类封版前窄 scope 确认专抓单测网盲区(异常分支/边界),每轮都有真 finding。
+2. **fabricate 事故与解法**(会话 14):超长 turn 末端连「算 SHA 写清单」类机械操作也会编造工具输出;解法=fresh session+入口 fail-closed 核验块原样实跑+「每个 SHA 真实命令观察」纪律,恢复永远不信交接值。
+3. **解析失败回退=fail-open 温床**:`except ValueError: fallback` 模式在排除类判定里必然放行畸形输入;A8/CD2 纪律(采集/解析故障=硬 abort,绝不折叠成排除/absence)须覆盖**每一个** shlex/json/split 点——同型排查(全 except 分支扫描)是修复的一部分。
+4. **差分确认的 artifact 标准**(r117/r118 树立):用 file-history 真实快照做 unified diff(非口述重建)+AST 引用检查+逆向 diff(还原旧句证 SHA 精确回滚)——「只改了 X」类声明从此要这种等级的证据。
+5. 审批锚必须核 driver 实现非文档措辞:BRIEF 曾写「cardSha256=card 封版 SHA」,driver 实核 matrix cardSha256——封版前跑一遍 approval 解析代码(:1201-1204)避免执行日 rc=2。
+
+---
+
+## R. 会话 12 收尾(2026-07-18)— 批次 1(P0A-8)执行闭环:degraded FAIL(真实负观察)+r98 收敛+口径 A【SUPERSEDED BY §S】
 
 > **SSOT 声明**:本 §R 为唯一 live 段;§Q 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
 > 分层 SSOT:架构/协议规格(**v0.12.19**)/Phase 0A 准备包/批次 1 执行包/**自动化执行形态提案 v0.5**锚均见 ledger v11 核验块(GV 锚 d80341b0… 不变);**批次 1 执行产物=`batch1/evidence/` 三件(repo 外)**;操作台账+激活入口=ledger「下会话激活(入口;**v11**)」段(v10 已 SUPERSEDED)。
