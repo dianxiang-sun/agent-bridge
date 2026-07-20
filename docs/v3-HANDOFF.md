@@ -448,9 +448,65 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **Codex 同轮多路独立复核**对规格类产出收敛极快(每轮 verdict 交集稳定),优于单路多轮。
 4. 修复引入新洞的模式在 wire 层同样成立(v0.3 PoP 自锁=修 v0.2 时引入);每轮修复后必须差分复核,与 §J.5#2 同型。
 
-## S. 会话 13-15 收尾(2026-07-19/20)— 批次 2(P0A-2 单项)执行包:r109→r118 十轮对抗封版 SEALED;待用户 userApproval+实机【最新 LIVE 段】
+## T. 会话 16 收尾(2026-07-20)— 批次 2 G6 修复 SEALED v5 RESEAL:执行日两环境 bug+一自引入回归全抓全修,四轮 Codex 审【最新 LIVE 段】
 
-> **SSOT 声明**:本 §S 为唯一 live 段;§R 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
+> **SSOT 声明**:本 §T 为唯一 live 段;§S 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
+> 分层 SSOT:spec v0.12.19/architecture v0.10/Phase 0A 准备包/批次 1 r94/提案 v0.5 r105 封版不变;**批次 2 工件全集=`~/Desktop/agentbridge_v3_apply_2026-07/batch2/`(card 现 SEALED v5,314b7e47)**(APPLY 非 git);操作台账+激活入口=ledger「下会话激活(入口;**v15**)」段(v14 及更早 SUPERSEDED)。
+> 一句话:会话 15 执行日首跑 setup 连撞两个 macOS 环境 bug(G5 sudoers NOTAFTER 格式/G6 command-less pane 经 login-zsh path_helper 重排 PATH),会话 16 修 G6 时首版(v4 单串 `/bin/zsh -f`)又引入自身 fail-open(第18例:外层 `$SHELL -c` 读 ~/.zshenv 可注入伪 clean PATH 骗过存在性断言)→**v5 终修=七 pane 全多 argv direct-exec(消除外层 shell)+G6 三断言唯一整行**;经**四轮 Codex 独立审**(交接盲审 858s→r121 1207s 抓第18例→r122 1525s 生产 CONFIRMED 无第19例+抓测试网 3 假PASS→r123 619s 测试网修复 A-F CONFIRMED)达 **READY-FOR-RESEAL-V5**。剩:用户 SEALED v5 明示 reapproval→sudo setup 重跑(全 6 门 PASS 预期)→driver --arm 实机(用户在场)。
+
+### T.1 激活(下会话第一步)
+
+读 ledger「下会话激活(入口;**v15**)」段并原样实跑其 fail-closed 核验块(v15 修盲审 A 三缺陷:精确 pin card 314b7e47/setup/watchdog+两 manifest 逐行,非 PIN_ONLY_FALLBACK)。⚠会话 14 曾 fabricate 一次工具输出——**每个 SHA/状态必须真实命令观察 function_result**。首件视用户动作:①已给 SEALED v5 reapproval(原文含 APPROVED+`cardSha256=d6ecffd8…`)→按 card §4 setup 重跑+实机;②未给→呈 reapproval 请求(变更摘要=card:3 v5 事由段)。
+
+### T.2 DONE(带证据;会话 16)
+
+| # | 事项 | 证据 | 等级 |
+|---|---|---|---|
+| 1 | 入口 v14 核验块原样实跑 ALL_CHECKS_PASS+healthz tuiConnected:true | function_result 真实观察 | GOLD |
+| 2 | 交接盲审(858s):HANDOFF-NOT-READY,六项(card r120 虚写/§S 过期/G6 范围叙述错/激活门缺陷等)全处置 | Codex 消息链;chat=v3-apply-s15-handoff | GOLD |
+| 3 | G5 修复独立 CONFIRMED(visudo 双向复现,抵充未执行的 r120) | 盲审 C 项 | GOLD |
+| 4 | G6 v4 首修(六 command-less pane 显式 /bin/zsh -f)+t6 六形态;方向 Claude 独立分析=Codex 盲审 D 两路收敛 | grep 核盘+t6 ALL_PASS | GOLD |
+| 5 | **r121(1207s)抓 v4 第18例 fail-open**(单串经外层 $SHELL -c 读 .zshenv 注入);Claude 独立真机复现 | Codex 消息+scratch 复现 | GOLD |
+| 6 | **G6 v5 终修**:七 pane 多 argv direct-exec+G6 三断言唯一整行;三形态(new-session/window/compound `\;`)真机抗注入实测 | grep 核盘七 pane+实测输出 | GOLD |
+| 7 | r122(1525s):生产 A-D/F/H CONFIRMED **无第19例**+抓测试网 3 假PASS(t6-2 target/t6-8 oracle/t3 未 source-bind) | Codex 消息链 | GOLD |
+| 8 | 测试网修复:t6 首窗-n cli1+keyed-set 唯一/t6-8 精确 2 行/t3:21/42 多argv/source-bound unit_r122;mutant 自验全抓 | 实跑+mutant 输出 | GOLD |
+| 9 | r123(619s):测试网修复 A-F CONFIRMED(mutant 抓+生产四件零改动)+card 一处行号必修 | Codex 消息链 | GOLD |
+| 10 | card SEALED v5 RESEAL(314b7e47)+生产四件 v5 零改动(driver 3d766120/setup c8a3774e/watchdog 8bc32026/frozen 98cf6b02) | 现场 shasum 实算 | GOLD |
+
+### T.3 状态
+
+1. **SEALED v5 SHA 锚(会话16 现场实算)**:card=314b7e4791365cdddbc4d8f88f882401e9bbc67a841ef8fda3a5ca5c33dab874;driver=3d76612003a24f090b07bc678becb28e18ae43e6d338136ccaa0f086f58625f0;setup=c8a3774e65ad45f96ee08d3faadc8c311d941b24ad56060caf64676aee95706b;watchdog=8bc32026aba4089aa7e68c82b56ed3b65aac20a7d459433982f70668b3779f6b;frozen_manifest=98cf6b021db1bc204f332eefe8565071dcbb4dc994c227cc22d9a81d7bf70f38;billing/matrix/sidecar/p0a8_manifest 四件不变。
+2. **approval 态**:§9 matrix/canonical steps 零改动→machine-pin d6ecffd8… 不变,driver 批准门 PASS(重跑核实);但 **SEALED v5 改了 pane 起动语义(driver/setup 行为),进 setup/探测窗口前须用户对 v5 明示 reapproval**(治理点=盲审 E.5:approval 只绑 §9 matrix 不绑核心工件本体;审批只认用户本人原文)。
+3. **G6 修复语义(最终口径)**:command-less tmux pane=login zsh→/etc/zprofile path_helper 重排 PATH;修复=七 pane(hl/bl/cli/p0a8+subject+watchdog cap+G6 自检)全多 argv direct-exec(tmux execvp 不经外层 `$SHELL -c`,内层 zsh -f 跳 ~/.zshenv;/etc/zshenv 不存在+abprobe 无 zsh 启动文件=零注入);G6 三断言唯一整行(拒多行/后缀/substring)。副作用记账:direct-exec 亦跳 LANG=C.UTF-8/history 设置(pane LANG unset,实测 Python/codex 编码无回归)。
+4. 两次执行日 setup 均 fail-closed 全回滚,系统干净;零探测零计费;OUT_DIR 收权保留=设计内。
+5. REPO:本 §T+§S 标记=本会话工作树改动,commit 待用户批(不 push;push-gated);链 …→14c31b0→93514c3。
+6. [UNVERIFIED-RUNTIME] 四组不变(hook argv/--json schema/hooks list wire/rollout 键名)+新:v5 多 argv pane 在 abprobe 真实账户 G6 门首过(t6 为 ds 侧同构证据,执行日 setup G6=真实首验)。
+
+### T.4 NOT-DONE(承接)
+
+| # | 待办 | 性质 |
+|---|---|---|
+| 1 | **用户 SEALED v5 明示 reapproval**(变更=card:3 v5 事由段;誊入 reapproval_v5.md;含 pane 起动语义变化) | 用户本人动作;不代填 |
+| 2 | sudo setup_abprobe.sh 重跑(全 6 门 PASS 预期;NOTAFTER 新鲜 now+3h;先归档现 G6-fail setup_run.log) | 用户 sudo+在场 |
+| 3 | driver --arm 实机探测窗口(card §4;device-auth/s5 s7 trust accept/P0A-8 四步;W1-W3;窗口内零 ask_codex) | 用户在场 |
+| 4 | UNVERIFIED-RUNTIME 四组首跑对齐(不符=fail-closed abort) | 执行日 |
+| 5 | 执行后:evidence 消费评审(人工+Codex,窗口外)+HANDOFF 执行段+ledger v16 | 执行日 |
+| 6 | 本 §T commit(docs/v3-design,不 push)+r98 残余/DS-3/batch1 evidence 入 repo/push——沿 §R.4 待用户 | 待用户 |
+| 7 | 可选(r123 非阻断 hygiene):unit_r122 mkdtemp 清理/绝对 import→__file__/t6:86 || true | 可选 |
+
+### T.5 教训(本会话新增;历代继续有效)
+
+1. **纸面十轮抓不到宿主环境语义 bug**(G5 sudoers NOTAFTER 格式/G6 login-pane path_helper):selfcheck/单测/对抗评审全程绿,真机 setup 两连抓;执行日 G 门=纸面验证体系外的真实防线,fail-closed 回滚让失败零代价。环境断言类修复必配「负对照」回归(t6-1:宿主语义变化使前提失效则必 FAIL)。
+2. **修复本身会引入同类新洞**(v4 单串 `/bin/zsh -f` 修 G6 却开外层 $SHELL -c 的 .zshenv fail-open=第18例):独立确认轮(r121)专抓;修复方向要抠到「构造保证 vs 当前观察」(多 argv execvp 消除外层 shell=构造保证)。
+3. **生产正确≠回归网闭合**(r122:生产 CONFIRMED 但 t6-2 target 误投/t6-8 oracle 太松/t3 未 source-bind):防复发网必须 source-bound(直调真实调用点+mutant 证能抓),名不副实的测试(t6-2 测成 new-window)靠 mutant 暴露。
+4. **账实声称随代码演进漂移**(card「t3:19/40」加注释后→:21/42;「八形态全绿」在 t6 假PASS 时过度):F2 纪律=每个 verified 声称都要对现盘复核,行号/覆盖度声称尤其易漂。
+5. approval 机器锚只绑 canonical steps 使文本/工装可修而 approval 存续——但行为语义变化时机器门 PASS≠授权有效,须回用户 reapproval。
+
+---
+
+## S. 会话 13-15 收尾(2026-07-19/20)— 批次 2(P0A-2 单项)执行包:r109→r118 十轮对抗封版 SEALED;待用户 userApproval+实机【SUPERSEDED BY §T(会话16 G6 修复 SEALED v5)】
+
+> **SSOT 声明**:§S 已 SUPERSEDED BY §T(会话16;live=§T);§R 及更早段亦 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
 > 分层 SSOT:spec v0.12.19/architecture v0.10/Phase 0A 准备包/批次 1 执行包 r94/提案 v0.5 r105 均封版不变(锚见 ledger);**批次 2 执行包工件全集=`~/Desktop/agentbridge_v3_apply_2026-07/batch2/`**(APPLY 非 git);操作台账+激活入口=ledger「下会话激活(入口;**v14**)」段(v13 及更早 SUPERSEDED)。
 > 一句话:批次 2 P0A-2 执行包经 **r109→r118 十轮 Codex 对抗/确认**(修复引入回归共 **17 例**,每例 Codex 独立抓回+复现变回归用例),CD14 从「机器证明 billing-none」诚实降级为 **best-effort M1 monitor+用户裁边界**;**用户已裁路径 A(接受 best-effort+批 card+实机执行)**;会话 15 fresh session 完成 r116(抓第 17 例 CD18-shlex fail-open)→r117→r118 **READY-FOR-SEAL** 确认链并 **card 封版(SEALED)**。剩:用户填 userApproval(机器锚=matrix cardSha256)→实机执行(用户在场窗口;UNVERIFIED-RUNTIME 项首跑验)。
 
