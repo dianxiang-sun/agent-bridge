@@ -4,8 +4,8 @@
 > **用途**:让下一会话(或 compaction 后的自己)不重读原始超长对话即可无偏移接续。
 > **真值锚点(SSOT)= `docs/v3-architecture.md`(DRAFT v0.10,2026-07-17 封版)**。本文是操作性快照;与设计文档冲突时以设计文档为准。
 >
-> ⚠**CURRENT LIVE ENTRYPOINT = §S.1**(2026-07-20 会话 15 收尾起;**批次 2(P0A-2 单项)执行包 r109→r118 十轮对抗封版 SEALED(修复引入回归 17 例全 Codex 抓回;CD14=best-effort M1 monitor+用户裁边界;用户已裁路径 A);剩:用户填 userApproval(机器锚=matrix cardSha256 d6ecffd8…)→实机执行(用户在场)**)。下会话激活唯一入口是 **§S**(→ 工作台账 `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` 的**激活入口 v14**;v13 及更早 SUPERSEDED);**§A–§R 的状态与行动段均为历史快照**(§R 为会话 12 时点,已被 §S supersede),下方旧「恢复顺序」均**勿据以起步/勿据以重开已定决策**。
-> **恢复顺序(现行)**:直接读 §S(§S.1 激活 → §S.2 DONE → §S.3 状态 → §S.4 NOT-DONE → §S.5 教训;**§K.4 授权口径与历代教训继续有效**)。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除后段明示替换处)仍有效。
+> ⚠**CURRENT LIVE ENTRYPOINT = §T.1**(2026-07-20 会话 16 收尾;**批次 2 G6 修复 SEALED v5 RESEAL[card 314b7e47,四轮 Codex 审:交接盲审+r121+r122+r123]+✅用户 v5 reapproval+✅§T commit+✅执行日 setup 六门 PASS(G5/G6 真机验)+✅device-auth(订阅);⚠driver --arm 探测 BLOCKED on watchdog default-channel healthz/恢复线 wire 不兼容(第四执行日发现:legacy healthz 缺 channelId/controlPort→恢复谓词必败+watchdog:171 abg-restart @default 被拒;三基线本身可构造 default/4502/pid,watchdog 能 arm——非命令构造不出/非 driver P12 报错)→下会话核心=Codex 协作修 watchdog healthz/pre-arm/abg-restart @default+CWD 固化→v6 reseal+用户 reapproval→重跑探测**;系统=部署态[sudoers lease 3h 自过期,零探测/零计费])。下会话激活唯一入口是 **§T**(→ ledger `~/Desktop/agentbridge_v3_apply_2026-07/ledger.md` **激活入口 v15**+**追记7/8[执行日探测尝试+盲审修补]**;v14 及更早 SUPERSEDED,含 §S);**§A–§S 状态与行动段均历史快照**,勿据以起步/勿据以重开已定决策。
+> **恢复顺序(现行)**:直接读 §T(§T.1 激活 → §T.2 DONE → §T.3 状态 → §T.4 NOT-DONE → §T.5 教训 → §T.6 执行日探测尝试更新;**§K.4 授权口径与历代教训继续有效**)+ledger 追记7/8。§I.3 证据台账、§I.6b 五仓 pinned SHA、§F/§G(除后段明示替换处)仍有效。
 > ~~恢复顺序(§J 时点,SUPERSEDED by §K,勿执行):读 §J(§J.1→§J.5)~~
 > ~~旧恢复顺序(SUPERSEDED by §J.1,勿执行):①跑 §B 核验 ②读 §0 ③读 §B→§E→§F→§G ④读附录 A+§6/§8/§9/§11 ⑤§D→§I.1~~
 
@@ -452,7 +452,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 
 > **SSOT 声明**:本 §T 为唯一 live 段;§S 及更早段 SUPERSEDED(§F/§G 锁定决策、历代教训、§K.4 授权口径继续有效)。
 > 分层 SSOT:spec v0.12.19/architecture v0.10/Phase 0A 准备包/批次 1 r94/提案 v0.5 r105 封版不变;**批次 2 工件全集=`~/Desktop/agentbridge_v3_apply_2026-07/batch2/`(card 现 SEALED v5,314b7e47)**(APPLY 非 git);操作台账+激活入口=ledger「下会话激活(入口;**v15**)」段(v14 及更早 SUPERSEDED)。
-> 一句话:会话 15 执行日首跑 setup 连撞两个 macOS 环境 bug(G5 sudoers NOTAFTER 格式/G6 command-less pane 经 login-zsh path_helper 重排 PATH),会话 16 修 G6 时首版(v4 单串 `/bin/zsh -f`)又引入自身 fail-open(第18例:外层 `$SHELL -c` 读 ~/.zshenv 可注入伪 clean PATH 骗过存在性断言)→**v5 终修=七 pane 全多 argv direct-exec(消除外层 shell)+G6 三断言唯一整行**;经**四轮 Codex 独立审**(交接盲审 858s→r121 1207s 抓第18例→r122 1525s 生产 CONFIRMED 无第19例+抓测试网 3 假PASS→r123 619s 测试网修复 A-F CONFIRMED)达 **READY-FOR-RESEAL-V5**。剩:用户 SEALED v5 明示 reapproval→sudo setup 重跑(全 6 门 PASS 预期)→driver --arm 实机(用户在场)。
+> 一句话:会话 15 执行日首跑 setup 连撞两个 macOS 环境 bug(G5 sudoers NOTAFTER 格式/G6 command-less pane 经 login-zsh path_helper 重排 PATH),会话 16 修 G6 时首版(v4 单串 `/bin/zsh -f`)又引入自身 fail-open(第18例:外层 `$SHELL -c` 读 ~/.zshenv 可注入伪 clean PATH 骗过存在性断言)→**v5 终修=七 pane 全多 argv direct-exec(消除外层 shell)+G6 三断言唯一整行**;经**四轮 Codex 独立审**(交接盲审 858s→r121 1207s 抓第18例→r122 1525s 生产 CONFIRMED 无第19例+抓测试网 3 假PASS→r123 619s 测试网 **A-D/F CONFIRMED**+**E card 行号 finding**[总 verdict=NOT-READY,勿写"A-F"],E 修后达 **READY-FOR-RESEAL-V5**)。**执行尝试(会话16,见 §T.6)**:✅用户 v5 reapproval+✅§T commit+✅setup 六门 PASS(G5/G6 真机验)+✅device-auth(订阅);⚠driver --arm 探测 **BLOCKED** on watchdog default-channel healthz/恢复线 wire 不兼容→下会话核心=Codex 协作修 watchdog wire+abg-restart @default+CWD 固化→v6 reseal+用户 reapproval→重跑探测。
 
 ### T.1 激活(下会话第一步)
 
@@ -470,7 +470,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 | 6 | **G6 v5 终修**:七 pane 多 argv direct-exec+G6 三断言唯一整行;三形态(new-session/window/compound `\;`)真机抗注入实测 | grep 核盘七 pane+实测输出 | GOLD |
 | 7 | r122(1525s):生产 A-D/F/H CONFIRMED **无第19例**+抓测试网 3 假PASS(t6-2 target/t6-8 oracle/t3 未 source-bind) | Codex 消息链 | GOLD |
 | 8 | 测试网修复:t6 首窗-n cli1+keyed-set 唯一/t6-8 精确 2 行/t3:21/42 多argv/source-bound unit_r122;mutant 自验全抓 | 实跑+mutant 输出 | GOLD |
-| 9 | r123(619s):测试网修复 A-F CONFIRMED(mutant 抓+生产四件零改动)+card 一处行号必修 | Codex 消息链 | GOLD |
+| 9 | r123(619s;总 verdict=NOT-READY):测试网 A-D/F CONFIRMED(mutant 抓+生产四件零改动)+**E card 行号 finding**(t3:19/40→:21/42+措辞)→按 E 机械修复+核盘达 READY | Codex 消息链 | GOLD |
 | 10 | card SEALED v5 RESEAL(314b7e47)+生产四件 v5 零改动(driver 3d766120/setup c8a3774e/watchdog 8bc32026/frozen 98cf6b02) | 现场 shasum 实算 | GOLD |
 
 ### T.3 状态
@@ -480,7 +480,7 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **G6 修复语义(最终口径)**:command-less tmux pane=login zsh→/etc/zprofile path_helper 重排 PATH;修复=七 pane(hl/bl/cli/p0a8+subject+watchdog cap+G6 自检)全多 argv direct-exec(tmux execvp 不经外层 `$SHELL -c`,内层 zsh -f 跳 ~/.zshenv;/etc/zshenv 不存在+abprobe 无 zsh 启动文件=零注入);G6 三断言唯一整行(拒多行/后缀/substring)。副作用记账:direct-exec 亦跳 LANG=C.UTF-8/history 设置(pane LANG unset,实测 Python/codex 编码无回归)。
 4. 两次执行日 setup 均 fail-closed 全回滚,系统干净;零探测零计费;OUT_DIR 收权保留=设计内。
 5. REPO:本 §T+§S 标记=本会话工作树改动,commit 待用户批(不 push;push-gated);链 …→14c31b0→93514c3。
-6. [UNVERIFIED-RUNTIME] 四组不变(hook argv/--json schema/hooks list wire/rollout 键名)+新:v5 多 argv pane 在 abprobe 真实账户 G6 门首过(t6 为 ds 侧同构证据,执行日 setup G6=真实首验)。
+6. [UNVERIFIED-RUNTIME] 四组不变(hook argv/--json schema/hooks list wire/rollout 键名)+v5 多 argv pane 的 G6 真实首验**须待执行日 setup**(本 §T 本体在 reseal/commit 时点[15:45]写就,当时 t6 仅 ds 侧同构证据、G6 真机未验;⚠勿把"真实首验"读作已发生——它与 [UNVERIFIED-RUNTIME] 标签本相斥。**执行日更新见 §T.6:setup 六门 PASS[16:13]已真机首验 G6 通过**)。
 
 ### T.4 NOT-DONE(承接)
 
@@ -501,6 +501,20 @@ last-validation:2026-07-14 收尾 `git status + shasum×3 + gh pr view×3`(我)+
 3. **生产正确≠回归网闭合**(r122:生产 CONFIRMED 但 t6-2 target 误投/t6-8 oracle 太松/t3 未 source-bind):防复发网必须 source-bound(直调真实调用点+mutant 证能抓),名不副实的测试(t6-2 测成 new-window)靠 mutant 暴露。
 4. **账实声称随代码演进漂移**(card「t3:19/40」加注释后→:21/42;「八形态全绿」在 t6 假PASS 时过度):F2 纪律=每个 verified 声称都要对现盘复核,行号/覆盖度声称尤其易漂。
 5. approval 机器锚只绑 canonical steps 使文本/工装可修而 approval 存续——但行为语义变化时机器门 PASS≠授权有效,须回用户 reapproval。
+6. **未来结果勿提前落盘**(§T.3.6 原写"执行日 setup G6=真实首验"在 reseal commit 时点[setup 未跑],后虽 PASS 但 commit 当时无证——同会话14型"未来工具结果提前声称";与 [UNVERIFIED-RUNTIME] 标签自相矛盾。已改措辞+补 §T.6 时序)。
+7. **交接文档随执行推进须原子更新**(会话16 探测尝试后 §T 顶部 pointer/摘要/状态/NOT-DONE 一度停在执行前态,与 ledger 部署后态冲突;s16-handoff 盲审抓出。规则:执行改变状态→顶部 live-pointer+对应段同批更新,勿留半态)。
+
+### T.6 执行日探测尝试更新(会话16;2026-07-20 用户在场;**supersede §T.3/§T.4 里 reapproval/commit/setup 的"待做/待批/系统干净"描述**——那些是 reseal 时点快照,以本段为准)
+
+> 一句话:SEALED v5 reseal 后,用户批 v5 reapproval+§T commit,开实机窗口→setup 六门 PASS(G5/G6 真机首验通过)+device-auth 成功→driver --arm 探测 **BLOCKED** on watchdog default-channel healthz/恢复线 wire 不兼容→健康边界收束,探测留下会话(修 watchdog→v6)。零探测/零 codex turn/零计费。
+
+- **✅v5 reapproval**(用户原文「批准 reapproval v5，APPROVED，按模板誊入；commit §T 也批。」→`batch2/reapproval_v5.md` 独立文件,driver 门要素 userApproval+APPROVED+machine-pin d6ecffd8+对象锚 card v5 SHA 314b7e47;门核 PASS)。**✅§T commit**=会话16 首次 §T 落盘的 commit(docs/v3-design;未 push);本 §T.6+顶部修正另有账实修正 commit。
+- **✅setup 六门 PASS**(用户 sudo;NOTAFTER now+3h):G5(sudoers NOTAFTER 剥 T 后 visudo ok)+**G6(pane identity/PATH/secret-count each unique-exact=v5 多argv+唯一整行断言真机首验)**均 PASS——两执行日环境 bug 修复真机确认。部署 spot-check:controller root:wheel 0755 SHA=5796b526/kit 43件==frozen_manifest(+KIT_SHA256.txt)/mkt abprobe 可写/baseline ds:staff/out 0770。
+- **✅device-auth**(订阅"Logged in using ChatGPT")+**CWD 问题(第三执行日发现)**:`sudo -u abprobe -H` 只改 HOME 不改 CWD(改 CWD 要 -D)→codex 从 CWD 找 project config 撞 ds `.codex` 权限墙→绕过=探测须从 `/Users/Shared/ab-probe-out` CWD 跑(祖先链无 .codex;实测通)。非冻结件 bug,是"探测须从中性 CWD 跑"操作约束未固化;v6 durability=card §4 补或 controller pin `-c`。
+- **⚠driver --arm 探测 BLOCKED(第四执行日发现;watchdog default-channel healthz/恢复线 wire 不兼容)**:driver P12 前置要 watchdog armed。**三基线可构造**(channel-profile.ts:98 channelId=default/controlPort=4502+status.json pid=39185)、**watchdog 能 arm**(arm 只核参数非空+controller 能力,healthz 首读在触发后;现盘 control dir 空+无 probe artifact=driver 未启动,非 P12 报错)。真 blocker(双):(a)运行中 legacy default bundle 的 `/healthz`(daemon.js:2322-2333)只产 pid/threadId/proxyUrl:4501/appServerUrl:4500/tuiConnected/bridgeReady/queuedMessageCount,**无 channelId/无 controlPort**→watchdog 恢复谓词(:186-190 match channelId/controlPort)必败→恢复保证不成立→**安全流程须阻断探测**(threadId≠channelId,proxyUrl:4501≠controlPort,不可互映);(b)独立漏项:watchdog:171 对 default 调 `abg-restart @default` 被 abg-restart:105 拒(reserved id,rc=1)。
+- **系统状态**:部署态(sudoers lease NOTAFTER now+3h 自过期+controller root:wheel+kit/mkt/baseline)+abprobe 订阅登录态;零探测/零 codex turn/零计费(仅 device-auth OAuth+login status 只读);封版件/SEALED v5(314b7e47)未动。
+- **下会话(探测续)**:①系统处置(视用户:teardown 撤 lease `sudo teardown_abprobe.sh --run-nonce b2p0a2-0720-noprobe` 或留 3h 自过期)②Codex 协作修 watchdog default-channel:healthz schema 对齐(bundle /healthz 出 channelId/controlPort,对齐 src/daemon.ts:854-869 contract 并重启)或 default 专用 fail-closed fallback(profile+status.json+pid+proxy/app URL 核身份)+abg-restart 对 default 调 `abg-restart /Users/ds`(仅 named 才 @channel)+arm 前验 healthz/status schema 与基线一致+CWD 固化→③改 watchdog(+可能 card §4/driver)→v6 reseal(全套自验+Codex 差分评审+重算 SHA)+**用户 v6 reapproval**→重跑 setup→探测。
+- **UNVERIFIED-RUNTIME 现状**:G6 多 argv pane 真机首验 PASS(本段);其余四组(hook argv/--json schema/hooks list wire/rollout 键名)仍待 driver --arm 探测(v6 后);watchdog healthz/abg-restart wire=本次执行日新暴露,已入 v6。
 
 ---
 
