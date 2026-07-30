@@ -139,5 +139,29 @@ approval_register_body = {"requestKind": "register",
                           "envelope": approval_envelope}
 emit("GV-7 approval RegisterBodyHashInput", "AgentBridge/RegisterBody/v1", approval_register_body)
 
+# GV-8 EffectSemantic 11-field replay-identity input (B1: baseline 7 fields +
+# per-event source-event quadruple; enums per spec - effectiveOrigin in {user, agent_rpc},
+# sourceChannel in {pep, approve_sh}, operationKind in closed v1 set; TargetRef full fields)
+effect_semantic_input = {
+    "effectContextId": "efc_00000000000000000000000000",
+    "effectiveOrigin": "user",
+    "authenticatedPrincipalId": "principal-test-1",
+    "originRuntimeSessionRecordId": "rs_00000000000000000000000000",
+    "sourceChannel": "pep",
+    "sourceEventId": "hostevt-00000000000000000001",
+    "operationKind": "fs_edit",
+    "toolName": "Edit",
+    "toolSchemaVersion": "1.0.0-test",
+    "canonicalArgs": {"file_path": "/Users/test/project/notes.txt",
+                      "old_string": "alpha", "new_string": "beta"},
+    "targets": [{"lexicalPath": "/Users/test/project/notes.txt",
+                 "canonicalPath": "/Users/test/project/notes.txt",
+                 "rootId": "root-test-1", "parentFileId": "fid-parent-1",
+                 "targetFileId": "fid-target-1",
+                 "preimageDigest": "sha256:" + "11" * 32,
+                 "expectedPostimageDigest": "sha256:" + "22" * 32,
+                 "linkCount": 1, "role": "destination"}]}
+emit("GV-8 EffectSemantic", "AgentBridge/EffectSemantic/v1", effect_semantic_input)
+
 for name, domain, jcs_str, digest in out:
     print(f"### {name}\ndomain: {domain}\nJCS: {jcs_str}\nresult: {digest}\n")
